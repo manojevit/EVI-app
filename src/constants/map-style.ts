@@ -13,8 +13,12 @@ export const MAP_STYLE = [
   { featureType: 'administrative', elementType: 'geometry', stylers: [{ visibility: 'off' }] },
 ];
 
-/** Camera for the onboarding map preview: Delhi NCR, where the EVIT stations are. */
-export const ONBOARDING_CAMERA = { latitude: 28.605, longitude: 77.12, zoom: 10 };
+/** Camera that frames every EVIT station (Delhi NCR) — used by onboarding and the embedded maps. */
+export const STATIONS_CAMERA = { latitude: 28.605, longitude: 77.12, zoom: 10 };
+
+/** Google's keyless map embed for a camera (used where the native map SDK isn't available). */
+export const embedUrl = (c = STATIONS_CAMERA) =>
+  `https://maps.google.com/maps?ll=${c.latitude},${c.longitude}&z=${c.zoom}&output=embed`;
 
 /**
  * Pixel offset of a coordinate from the map centre, using Google's Web Mercator
@@ -24,7 +28,7 @@ export const ONBOARDING_CAMERA = { latitude: 28.605, longitude: 77.12, zoom: 10 
 export function projectFromCenter(
   latitude: number,
   longitude: number,
-  center = ONBOARDING_CAMERA,
+  center = STATIONS_CAMERA,
 ) {
   const world = 256 * 2 ** center.zoom;
   const mercY = (lat: number) => Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI) / 360));
