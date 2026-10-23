@@ -1,17 +1,23 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import AppHeader from '@/components/app-header';
 import { MiniBars } from '@/components/energy-bars';
 import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
-import { CANCELLED_SESSIONS, HISTORY_MONTH, SESSION_HISTORY, formatINR } from '@/data/mock';
+import { useAppStore } from '@/data/app-store';
+import { CANCELLED_SESSIONS, formatINR } from '@/data/mock';
 import { scaledSheet } from '@/constants/responsive';
 
 const MONTHS = ['Oct 2026', 'Sep 2026', 'Aug 2026', 'Jul 2026'];
 
 export default function HistoryScreen() {
+  const router = useRouter();
+  const history = useAppStore((st) => st.history);
+  const totalKwh = history.reduce((n, r) => n + r.energyKwh, 0);
+  const totalINR = history.reduce((n, r) => n + r.costINR, 0);
   const [month, setMonth] = useState('Oct 2026');
   const [tab, setTab] = useState<'completed' | 'cancelled'>('completed');
   const hasData = month === 'Oct 2026'; // only the current month is populated
@@ -35,12 +41,12 @@ export default function HistoryScreen() {
         <LinearGradient colors={Palette.gradHero} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.summary}>
           <View style={styles.sumItem}>
             <Text style={styles.sumLabel}>ENERGY</Text>
-            <Text style={styles.sumValue}>{hasData ? HISTORY_MONTH.totalKwh : 0} kWh</Text>
+            <Text style={styles.sumValue}>{hasData ? totalKwh.toFixed(2) : 0} kWh</Text>
           </View>
           <View style={styles.sumDivider} />
           <View style={styles.sumItem}>
             <Text style={styles.sumLabel}>SPENT</Text>
-            <Text style={styles.sumValue}>{formatINR(hasData ? HISTORY_MONTH.totalINR : 0)}</Text>
+            <Text style={styles.sumValue}>{formatINR(hasData ? totalINR : 0)}</Text>
           </View>
           <MiniBars color={Palette.volt} />
         </LinearGradient>
@@ -57,7 +63,7 @@ export default function HistoryScreen() {
             <Text style={styles.emptyText}>No sessions in {month}</Text>
           </View>
         ) : tab === 'completed' ? (
-          SESSION_HISTORY.map((r) => (
+          history.map((r) => (
             <View key={r.id} style={styles.card}>
               <View style={styles.top}>
                 <View style={styles.iconChip}>
@@ -76,8 +82,8 @@ export default function HistoryScreen() {
               <View style={styles.divider} />
               <View style={styles.bottom}>
                 <Text style={styles.reason}>{r.reason}</Text>
-                <TouchableOpacity style={styles.receipt} activeOpacity={0.8}>
-                  <Ionicons name="download-outline" size={16} color={Palette.forest} />
+                <TouchableOpacity style={styles.receipt} activeOpacity={0.8} onPress={() => router.push({ pathname: '/receipt/[id]', params: { id: r.id } })}>
+                  <Ionicons name="receipt-outline" size={16} color={Palette.forest} />
                   <Text style={styles.receiptText}>Receipt</Text>
                 </TouchableOpacity>
               </View>
@@ -120,7 +126,7 @@ function Seg({ label, active, onPress }: { label: string; active: boolean; onPre
 const styles = scaledSheet({
   container: { flex: 1, backgroundColor: Palette.canvas },
   scroll: { padding: Spacing.lg, paddingBottom: 40, gap: Spacing.md },
-  title: { fontFamily: Font.display, fontSize: 24, color: Palette.ink },
+  title: { fontFamily: Font.display, fontSize: 22, color: Palette.ink },
 
   months: { gap: Spacing.sm, paddingVertical: 2 },
   month: { paddingHorizontal: Spacing.lg, paddingVertical: 9, borderRadius: Radius.pill, backgroundColor: Palette.surface, ...Shadow.soft },

@@ -127,7 +127,7 @@ const CORNER = 34;
 const styles = scaledSheet({
   container: { flex: 1, backgroundColor: Palette.canvas },
   scroll: { padding: Spacing.lg, paddingBottom: 48, gap: Spacing.md },
-  title: { fontFamily: Font.display, fontSize: 26, color: Palette.ink },
+  title: { fontFamily: Font.display, fontSize: 22, color: Palette.ink },
   subtitle: { fontFamily: Font.regular, fontSize: 15, color: Palette.mist, marginTop: -Spacing.sm },
 
   viewfinder: { height: 300, borderRadius: Radius.hero, overflow: 'hidden', backgroundColor: Palette.voltSofter, borderWidth: 1, borderColor: Palette.brandTint2, marginTop: Spacing.sm },

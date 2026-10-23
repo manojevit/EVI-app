@@ -1,80 +1,126 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useState } from 'react';
-import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useState, type ReactNode } from 'react';
+import { KeyboardAvoidingView, Platform, ScrollView, Text, TextInput, View } from 'react-native';
 
-import ActiveSessionBar from '@/components/active-session-bar';
 import AppHeader from '@/components/app-header';
 import VoltButton from '@/components/volt-button';
-import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
-import { ACCOUNT } from '@/data/mock';
 import { scaledSheet } from '@/constants/responsive';
+import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
+import { saveProfile, useAppStore } from '@/data/app-store';
+import { ACCOUNT } from '@/data/mock';
+
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 export default function ProfileScreen() {
-  const [name, setName] = useState(ACCOUNT.name);
-  const [email, setEmail] = useState(ACCOUNT.email);
+  const profile = useAppStore((st) => st.profile);
+  const [name, setName] = useState(profile.name);
+  const [email, setEmail] = useState(profile.email);
+  const [saved, setSaved] = useState(false);
+
+  const changed = name.trim() !== profile.name || email.trim() !== profile.email;
+  const emailOk = EMAIL.test(email.trim());
+  const valid = name.trim().length > 1 && emailOk;
+
+  const save = () => {
+    saveProfile({ name: name.trim(), email: email.trim() });
+    setSaved(true);
+  };
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <AppHeader back />
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <View style={styles.avatarRing}>
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+        <View style={styles.head}>
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{ACCOUNT.initial}</Text>
+            <Text style={styles.avatarText}>{name.trim()[0]?.toUpperCase() ?? ACCOUNT.initial}</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.title}>Profile</Text>
+            <Text style={styles.sub}>Your name and email appear on receipts.</Text>
           </View>
         </View>
 
         <View style={styles.card}>
-          <Field label="NAME" icon="person-outline">
-            <TextInput value={name} onChangeText={setName} style={styles.input} />
+          <Field label="Name" icon="person-outline">
+            <TextInput
+              value={name}
+              onChangeText={(v) => {
+                setName(v);
+                setSaved(false);
+              }}
+              style={styles.input}
+              autoCapitalize="words"
+            />
           </Field>
-          <View style={styles.divider} />
-          <Field label="EMAIL" icon="mail-outline">
-            <TextInput value={email} onChangeText={setEmail} style={styles.input} autoCapitalize="none" keyboardType="email-address" />
+          <Field label="Email" icon="mail-outline" error={!emailOk && email.length > 0 ? 'Enter a valid email' : undefined}>
+            <TextInput
+              value={email}
+              onChangeText={(v) => {
+                setEmail(v);
+                setSaved(false);
+              }}
+              style={styles.input}
+              autoCapitalize="none"
+              keyboardType="email-address"
+            />
           </Field>
-          <View style={styles.divider} />
-          <View style={styles.lockedRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.label}>PHONE</Text>
+          <View>
+            <Text style={styles.label}>Phone</Text>
+            <View style={[styles.inputWrap, styles.locked]}>
+              <Ionicons name="call-outline" size={17} color={Palette.mist} />
               <Text style={styles.phone}>{ACCOUNT.phone}</Text>
+              <Ionicons name="lock-closed" size={15} color={Palette.mistLight} />
             </View>
-            <Ionicons name="lock-closed" size={18} color={Palette.mistLight} />
+            <Text style={styles.hint}>Your login number can&apos;t be changed here.</Text>
           </View>
-          <Text style={styles.hint}>Your login number can&apos;t be changed here.</Text>
         </View>
 
-        <VoltButton label="Save changes" icon="save-outline" disabled style={{ marginTop: Spacing.lg }} />
+        {saved ? (
+          <View style={styles.saved}>
+            <Ionicons name="checkmark-circle" size={18} color={Palette.forest} />
+            <Text style={styles.savedText}>Changes saved</Text>
+          </View>
+        ) : (
+          <VoltButton label="Save changes" icon="checkmark" disabled={!changed || !valid} onPress={save} />
+        )}
       </ScrollView>
-
-      <ActiveSessionBar />
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
-function Field({ label, icon, children }: { label: string; icon: keyof typeof Ionicons.glyphMap; children: React.ReactNode }) {
+function Field({ label, icon, error, children }: { label: string; icon: keyof typeof Ionicons.glyphMap; error?: string; children: ReactNode }) {
   return (
     <View>
       <Text style={styles.label}>{label}</Text>
-      <View style={styles.inputWrap}>
-        <Ionicons name={icon} size={20} color={Palette.forest} />
+      <View style={[styles.inputWrap, error ? styles.inputError : null]}>
+        <Ionicons name={icon} size={17} color={Palette.forest} />
         {children}
       </View>
+      {error ? <Text style={styles.error}>{error}</Text> : null}
     </View>
   );
 }
 
 const styles = scaledSheet({
   container: { flex: 1, backgroundColor: Palette.canvas },
-  scroll: { padding: Spacing.lg, paddingBottom: 100, gap: Spacing.lg },
-  avatarRing: { alignSelf: 'center', width: 132, height: 132, borderRadius: 66, backgroundColor: Palette.voltSoft, alignItems: 'center', justifyContent: 'center', marginTop: Spacing.sm },
-  avatar: { width: 100, height: 100, borderRadius: 50, backgroundColor: Palette.forest, alignItems: 'center', justifyContent: 'center' },
-  avatarText: { fontFamily: Font.display, fontSize: 42, color: Palette.white },
+  scroll: { padding: Spacing.lg, paddingTop: Spacing.xs, paddingBottom: 48, gap: Spacing.lg },
 
-  card: { backgroundColor: Palette.surface, borderRadius: Radius.card, padding: Spacing.lg, gap: Spacing.lg, ...Shadow.soft },
-  label: { fontFamily: Font.bold, fontSize: 12, letterSpacing: 1, color: Palette.mist, marginBottom: Spacing.sm },
-  inputWrap: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, borderWidth: 1, borderColor: Palette.line, borderRadius: Radius.chip, paddingHorizontal: Spacing.lg, height: 56, backgroundColor: Palette.surfaceAlt },
-  input: { flex: 1, fontFamily: Font.medium, fontSize: 17, color: Palette.ink, padding: 0 },
-  divider: { height: StyleSheet.hairlineWidth, backgroundColor: Palette.lineSoft },
-  lockedRow: { flexDirection: 'row', alignItems: 'center' },
-  phone: { fontFamily: Font.displaySemi, fontSize: 19, color: Palette.ink },
-  hint: { fontFamily: Font.regular, fontSize: 14, color: Palette.mist },
+  head: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
+  avatar: { width: 54, height: 54, borderRadius: 27, backgroundColor: Palette.forest, alignItems: 'center', justifyContent: 'center' },
+  avatarText: { fontFamily: Font.display, fontSize: 22, color: Palette.white },
+  title: { fontFamily: Font.display, fontSize: 20, color: Palette.ink },
+  sub: { fontFamily: Font.regular, fontSize: 13, color: Palette.mist, marginTop: 1 },
+
+  card: { backgroundColor: Palette.surface, borderRadius: Radius.card, padding: Spacing.lg, gap: Spacing.md, ...Shadow.soft },
+  label: { fontFamily: Font.semibold, fontSize: 12, color: Palette.mist, marginBottom: 6 },
+  inputWrap: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, borderWidth: 1, borderColor: Palette.line, borderRadius: Radius.chip, paddingHorizontal: Spacing.md, height: 46, backgroundColor: Palette.surfaceAlt },
+  inputError: { borderColor: Palette.red },
+  locked: { backgroundColor: Palette.canvasDeep },
+  input: { flex: 1, fontFamily: Font.medium, fontSize: 15, color: Palette.ink, padding: 0 },
+  phone: { flex: 1, fontFamily: Font.medium, fontSize: 15, color: Palette.inkSoft },
+  hint: { fontFamily: Font.regular, fontSize: 12, color: Palette.mist, marginTop: 6 },
+  error: { fontFamily: Font.medium, fontSize: 12, color: Palette.red, marginTop: 4 },
+
+  saved: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: Spacing.md },
+  savedText: { fontFamily: Font.semibold, fontSize: 14, color: Palette.forest },
 });

@@ -1,86 +1,89 @@
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { Fragment } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import AppHeader from '@/components/app-header';
-import { MiniBars } from '@/components/energy-bars';
 import VoltButton from '@/components/volt-button';
-import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
-import { ACCOUNT, formatINR } from '@/data/mock';
 import { scaledSheet } from '@/constants/responsive';
+import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
+import { useAppStore } from '@/data/app-store';
+import { ACCOUNT, formatINR } from '@/data/mock';
 
 type IconName = keyof typeof Ionicons.glyphMap;
-
-const MENU: { icon: IconName; title: string; subtitle: string; route: string }[] = [
-  { icon: 'person-outline', title: 'Profile', subtitle: 'Name, email, phone', route: '/profile' },
-  { icon: 'car-sport-outline', title: 'My vehicles', subtitle: 'Manage your EVs', route: '/vehicles' },
-  { icon: 'ribbon-outline', title: 'Subscription', subtitle: 'Plans & billing', route: '/plans' },
-  { icon: 'chatbubbles-outline', title: 'Help & support', subtitle: 'Tickets, contact & FAQs', route: '/support' },
-  { icon: 'settings-outline', title: 'Settings', subtitle: 'Language & preferences', route: '/settings' },
-];
+type Item = { icon: IconName; title: string; route: string; badge?: string };
 
 export default function AccountScreen() {
   const router = useRouter();
+  const profile = useAppStore((st) => st.profile);
+  const balance = useAppStore((st) => st.walletBalance);
+  const openTickets = useAppStore((st) => st.tickets.filter((t) => t.status === 'Open').length);
+
+  const groups: Item[][] = [
+    [
+      { icon: 'car-sport-outline', title: 'My vehicles', route: '/vehicles' },
+      { icon: 'time-outline', title: 'Charging history', route: '/history' },
+      { icon: 'ribbon-outline', title: 'Subscription', route: '/plans' },
+    ],
+    [
+      { icon: 'help-circle-outline', title: 'Help & FAQs', route: '/help' },
+      { icon: 'file-tray-full-outline', title: 'My tickets', route: '/tickets', badge: openTickets ? `${openTickets} open` : undefined },
+      { icon: 'settings-outline', title: 'Settings', route: '/settings' },
+    ],
+  ];
 
   return (
     <View style={styles.container}>
       <AppHeader />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* profile hero */}
-        <TouchableOpacity activeOpacity={0.9} onPress={() => router.push('/profile')} style={styles.hero}>
+        {/* profile */}
+        <TouchableOpacity activeOpacity={0.85} onPress={() => router.push('/profile')} style={styles.profile}>
           <View style={styles.avatar}>
-            <Text style={styles.avatarText}>{ACCOUNT.initial}</Text>
+            <Text style={styles.avatarText}>{profile.name.trim()[0]?.toUpperCase() ?? ACCOUNT.initial}</Text>
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.name}>{ACCOUNT.name}</Text>
+            <Text style={styles.name} numberOfLines={1}>
+              {profile.name}
+            </Text>
             <Text style={styles.phone}>{ACCOUNT.phone}</Text>
           </View>
-          <Ionicons name="chevron-forward" size={22} color={Palette.mistLight} />
+          <Ionicons name="chevron-forward" size={18} color={Palette.mistLight} />
         </TouchableOpacity>
 
-        {/* wallet */}
-        <LinearGradient colors={Palette.gradHero} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.wallet}>
-          <View style={styles.walletTop}>
-            <View style={styles.walletBadge}>
-              <View style={styles.walletIcon}>
-                <Ionicons name="wallet" size={15} color={Palette.forest} />
-              </View>
-              <Text style={styles.walletLabel}>Wallet balance</Text>
-            </View>
-            <MiniBars color={Palette.volt} />
+        {/* wallet: compact */}
+        <TouchableOpacity activeOpacity={0.85} onPress={() => router.push('/wallet')} style={styles.wallet}>
+          <View style={styles.walletIcon}>
+            <Ionicons name="wallet" size={17} color={Palette.forest} />
           </View>
-          <Text style={styles.walletAmount}>{formatINR(ACCOUNT.walletBalance)}</Text>
-          <View style={styles.walletRow}>
-            <Text style={styles.walletHint}>Enough for ~1,600 kWh</Text>
-            <TouchableOpacity style={styles.addBtn} activeOpacity={0.85} onPress={() => router.push('/wallet')}>
-              <Ionicons name="add" size={18} color={Palette.white} />
-              <Text style={styles.addText}>Add money</Text>
-            </TouchableOpacity>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.walletLabel}>Wallet balance</Text>
+            <Text style={styles.walletAmount}>{formatINR(balance)}</Text>
           </View>
-        </LinearGradient>
+          <View style={styles.addBtn}>
+            <Ionicons name="add" size={15} color={Palette.white} />
+            <Text style={styles.addText}>Add money</Text>
+          </View>
+        </TouchableOpacity>
 
-        {/* menu */}
-        <View style={styles.menu}>
-          {MENU.map((item, i) => (
-            <Fragment key={item.title}>
-              {i > 0 ? <View style={styles.divider} /> : null}
-              <TouchableOpacity style={styles.row} activeOpacity={0.7} onPress={() => router.push(item.route as never)}>
-                <View style={styles.rowIcon}>
-                  <Ionicons name={item.icon} size={21} color={Palette.forest} />
-                </View>
-                <View style={{ flex: 1 }}>
+        {groups.map((items, g) => (
+          <View key={g} style={styles.menu}>
+            {items.map((item, i) => (
+              <Fragment key={item.title}>
+                {i > 0 ? <View style={styles.divider} /> : null}
+                <TouchableOpacity style={styles.row} activeOpacity={0.7} onPress={() => router.push(item.route as never)}>
+                  <View style={styles.rowIcon}>
+                    <Ionicons name={item.icon} size={19} color={Palette.forest} />
+                  </View>
                   <Text style={styles.rowTitle}>{item.title}</Text>
-                  <Text style={styles.rowSub}>{item.subtitle}</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={20} color={Palette.mistLight} />
-              </TouchableOpacity>
-            </Fragment>
-          ))}
-        </View>
+                  {item.badge ? <Text style={styles.badge}>{item.badge}</Text> : null}
+                  <Ionicons name="chevron-forward" size={17} color={Palette.mistLight} />
+                </TouchableOpacity>
+              </Fragment>
+            ))}
+          </View>
+        ))}
 
-        <VoltButton label="Log out" icon="log-out-outline" variant="outline" style={{ marginTop: Spacing.xl }} />
+        <VoltButton label="Log out" icon="log-out-outline" variant="outline" onPress={() => router.replace('/login')} />
       </ScrollView>
     </View>
   );
@@ -88,29 +91,25 @@ export default function AccountScreen() {
 
 const styles = scaledSheet({
   container: { flex: 1, backgroundColor: Palette.canvas },
-  scroll: { padding: Spacing.lg, paddingBottom: 130, gap: Spacing.lg },
+  scroll: { padding: Spacing.lg, paddingTop: Spacing.xs, paddingBottom: 130, gap: Spacing.md },
 
-  hero: { flexDirection: 'row', alignItems: 'center', gap: Spacing.lg, backgroundColor: Palette.surface, borderRadius: Radius.card, padding: Spacing.lg, ...Shadow.soft },
-  avatar: { width: 58, height: 58, borderRadius: 29, backgroundColor: Palette.forest, alignItems: 'center', justifyContent: 'center' },
-  avatarText: { fontFamily: Font.display, fontSize: 24, color: Palette.white },
-  name: { fontFamily: Font.displaySemi, fontSize: 21, color: Palette.ink },
-  phone: { fontFamily: Font.regular, fontSize: 15, color: Palette.mist, marginTop: 2 },
+  profile: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, backgroundColor: Palette.surface, borderRadius: Radius.card, padding: Spacing.md, ...Shadow.soft },
+  avatar: { width: 46, height: 46, borderRadius: 23, backgroundColor: Palette.forest, alignItems: 'center', justifyContent: 'center' },
+  avatarText: { fontFamily: Font.display, fontSize: 19, color: Palette.white },
+  name: { fontFamily: Font.displaySemi, fontSize: 16, color: Palette.ink },
+  phone: { fontFamily: Font.regular, fontSize: 13, color: Palette.mist, marginTop: 1 },
 
-  wallet: { borderRadius: Radius.card, padding: Spacing.xl, gap: Spacing.lg, borderWidth: 1, borderColor: Palette.brandTint2, ...Shadow.soft },
-  walletTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  walletBadge: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  walletIcon: { width: 28, height: 28, borderRadius: 14, backgroundColor: Palette.surface, alignItems: 'center', justifyContent: 'center' },
-  walletLabel: { fontFamily: Font.semibold, fontSize: 14, color: Palette.inkSoft },
-  walletRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  walletAmount: { fontFamily: Font.display, fontSize: 34, color: Palette.ink, marginTop: -Spacing.sm },
-  walletHint: { fontFamily: Font.regular, fontSize: 13, color: Palette.mist },
-  addBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: Palette.volt, borderRadius: Radius.pill, paddingHorizontal: Spacing.lg, paddingVertical: 10, ...Shadow.volt },
-  addText: { fontFamily: Font.bold, fontSize: 14, color: Palette.white },
+  wallet: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, backgroundColor: Palette.voltSofter, borderRadius: Radius.card, padding: Spacing.md, borderWidth: 1, borderColor: Palette.brandTint2 },
+  walletIcon: { width: 38, height: 38, borderRadius: 19, backgroundColor: Palette.surface, alignItems: 'center', justifyContent: 'center' },
+  walletLabel: { fontFamily: Font.medium, fontSize: 12, color: Palette.mist },
+  walletAmount: { fontFamily: Font.display, fontSize: 17, color: Palette.ink, marginTop: 1 },
+  addBtn: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: Palette.volt, borderRadius: Radius.pill, paddingHorizontal: Spacing.md, paddingVertical: 7 },
+  addText: { fontFamily: Font.bold, fontSize: 12, color: Palette.white },
 
-  menu: { backgroundColor: Palette.surface, borderRadius: Radius.card, paddingHorizontal: Spacing.lg, ...Shadow.soft },
-  row: { flexDirection: 'row', alignItems: 'center', gap: Spacing.lg, paddingVertical: Spacing.lg },
-  rowIcon: { width: 42, height: 42, borderRadius: Radius.chip, backgroundColor: Palette.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
-  rowTitle: { fontFamily: Font.semibold, fontSize: 17, color: Palette.ink },
-  rowSub: { fontFamily: Font.regular, fontSize: 13, color: Palette.mist, marginTop: 1 },
-  divider: { height: StyleSheet.hairlineWidth, backgroundColor: Palette.lineSoft },
+  menu: { backgroundColor: Palette.surface, borderRadius: Radius.card, paddingHorizontal: Spacing.md, ...Shadow.soft },
+  row: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, paddingVertical: Spacing.md },
+  rowIcon: { width: 34, height: 34, borderRadius: Radius.chip, backgroundColor: Palette.surfaceAlt, alignItems: 'center', justifyContent: 'center' },
+  rowTitle: { flex: 1, fontFamily: Font.semibold, fontSize: 15, color: Palette.ink },
+  badge: { fontFamily: Font.bold, fontSize: 11, color: Palette.amberDeep, backgroundColor: Palette.amberSoft, borderRadius: Radius.pill, paddingHorizontal: 8, paddingVertical: 2, overflow: 'hidden' },
+  divider: { height: StyleSheet.hairlineWidth, backgroundColor: Palette.lineSoft, marginLeft: 46 },
 });

@@ -1,30 +1,46 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { FlatList, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import StationCard from '@/components/station-card';
 import LiveMap from '@/components/live-map';
 import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
-import { ACCOUNT, STATIONS } from '@/data/mock';
+import { activeFilterCount, setFilters, stationMatches, useAppStore } from '@/data/app-store';
+import { STATIONS, distanceKm, maxPowerKw, stationExtras } from '@/data/mock';
 import { s, scaledSheet } from '@/constants/responsive';
+
+const SORTS = ['Nearest', 'Cheapest', 'Fastest', 'Top rated'] as const;
+type Sort = (typeof SORTS)[number];
 
 export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const balance = useAppStore((st) => st.walletBalance);
+  const filters = useAppStore((st) => st.filters);
+  const favourites = useAppStore((st) => st.favourites);
   const [query, setQuery] = useState('');
   const [showList, setShowList] = useState(false);
-  const [availableOnly, setAvailableOnly] = useState(false);
+  const [sort, setSort] = useState<Sort>('Nearest');
+  const [recenter, setRecenter] = useState(0); // bump to re-fit the map to the stations
+  const filterCount = activeFilterCount(filters);
 
   const stations = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return STATIONS.filter((s) => {
-      if (availableOnly && s.status !== 'Available') return false;
+    const list = STATIONS.filter((st) => {
+      if (!stationMatches(st, filters, favourites)) return false;
       if (!q) return true;
-      return s.name.toLowerCase().includes(q) || s.address.toLowerCase().includes(q);
+      return st.name.toLowerCase().includes(q) || st.address.toLowerCase().includes(q) || st.city.toLowerCase().includes(q);
     });
-  }, [query, availableOnly]);
+    const by: Record<Sort, (a: (typeof STATIONS)[number], b: (typeof STATIONS)[number]) => number> = {
+      Nearest: (a, b) => distanceKm(a) - distanceKm(b),
+      Cheapest: (a, b) => a.pricePerKwh - b.pricePerKwh,
+      Fastest: (a, b) => maxPowerKw(b) - maxPowerKw(a),
+      'Top rated': (a, b) => stationExtras(b).rating - stationExtras(a).rating,
+    };
+    return [...list].sort(by[sort]);
+  }, [query, filters, favourites, sort]);
 
   const topPad = insets.top + Spacing.sm;
 
@@ -33,13 +49,35 @@ export default function HomeScreen() {
       {showList ? (
         <FlatList
           data={stations}
-          keyExtractor={(s) => s.id}
+          keyExtractor={(st) => st.id}
           renderItem={({ item }) => <StationCard station={item} />}
-          contentContainerStyle={{ paddingTop: topPad + s(128), paddingHorizontal: s(Spacing.lg), paddingBottom: s(140), gap: Spacing.md }}
+          contentContainerStyle={{ paddingTop: topPad + s(124), paddingHorizontal: s(Spacing.lg), paddingBottom: s(150), gap: s(Spacing.md) }}
           showsVerticalScrollIndicator={false}
+          ListHeaderComponent={
+            <View style={styles.listHead}>
+              <Text style={styles.count}>
+                {stations.length} {stations.length === 1 ? 'station' : 'stations'}
+              </Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sorts}>
+                {SORTS.map((o) => (
+                  <TouchableOpacity key={o} onPress={() => setSort(o)} activeOpacity={0.85} style={[styles.sort, sort === o && styles.sortOn]}>
+                    <Text style={[styles.sortText, sort === o && styles.sortTextOn]}>{o}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          }
+          ListEmptyComponent={
+            <View style={styles.empty}>
+              <Ionicons name="search" size={30} color={Palette.mistLight} />
+              <Text style={styles.emptyTitle}>No stations match</Text>
+              <Text style={styles.emptyText}>Try another search or turn off a filter.</Text>
+            </View>
+          }
         />
       ) : (
         <LiveMap
+          key={recenter}
           pins={stations.map((st) => ({ id: st.id, latitude: st.latitude, longitude: st.longitude, available: st.status === 'Available' }))}
           // keep pins clear of the search bar + chips above and the tab bar below
           // (+52 on top: padding counts to a pin's tip, and the pin head is ~52pt tall)
@@ -61,43 +99,48 @@ export default function HomeScreen() {
               style={styles.input}
             />
           </View>
-          <CircleBtn icon="options-outline" onPress={() => router.push('/filters')} />
+          <CircleBtn icon="options-outline" badge={filterCount} onPress={() => router.push('/filters')} />
           <CircleBtn icon="notifications-outline" onPress={() => router.push('/notifications')} />
         </View>
 
         <View style={styles.chipRow}>
-          <Chip label="Available" active={availableOnly} onPress={() => setAvailableOnly((v) => !v)} />
-          <Chip label="Nearby" onPress={() => {}} />
+          <Chip label="Available" active={filters.availableNow} onPress={() => setFilters({ availableNow: !filters.availableNow })} />
+          <Chip label="DC fast" active={filters.category === 'DC'} onPress={() => setFilters({ category: filters.category === 'DC' ? null : 'DC' })} />
           <TouchableOpacity style={styles.wallet} activeOpacity={0.85} onPress={() => router.push('/wallet')}>
-            <Ionicons name="wallet" size={16} color={Palette.forest} />
-            <Text style={styles.walletText}>₹{ACCOUNT.walletBalance.toLocaleString('en-IN')}</Text>
+            <Ionicons name="wallet" size={15} color={Palette.forest} />
+            <Text style={styles.walletText}>₹{Math.floor(balance).toLocaleString('en-IN')}</Text>
           </TouchableOpacity>
           <View style={{ flex: 1 }} />
-          <TouchableOpacity style={styles.toggle} activeOpacity={0.85} onPress={() => setShowList((v) => !v)}>
+          <TouchableOpacity style={styles.toggle} activeOpacity={0.85} onPress={() => setShowList((v) => !v)} accessibilityLabel={showList ? 'Show map' : 'Show list'}>
             <Ionicons name={showList ? 'map' : 'list'} size={20} color={Palette.white} />
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* Action stack */}
-      <View style={[styles.fabStack, { bottom: insets.bottom + 110 }]} pointerEvents="box-none">
-        {!showList ? (
-          <TouchableOpacity style={styles.smallFab} activeOpacity={0.85} onPress={() => {}}>
+      {/* Action stack (map view only, so it never covers list cards) */}
+      {!showList ? (
+        <View style={[styles.fabStack, { bottom: insets.bottom + 110 }]} pointerEvents="box-none">
+          <TouchableOpacity style={styles.smallFab} activeOpacity={0.85} onPress={() => setRecenter((n) => n + 1)} accessibilityLabel="Show all stations">
             <Ionicons name="locate" size={22} color={Palette.forest} />
           </TouchableOpacity>
-        ) : null}
-        <TouchableOpacity style={styles.qrFab} activeOpacity={0.9} onPress={() => router.push('/scan')}>
-          <MaterialCommunityIcons name="qrcode-scan" size={28} color={Palette.white} />
-        </TouchableOpacity>
-      </View>
+          <TouchableOpacity style={styles.qrFab} activeOpacity={0.9} onPress={() => router.push('/scan')} accessibilityLabel="Scan to charge">
+            <MaterialCommunityIcons name="qrcode-scan" size={28} color={Palette.white} />
+          </TouchableOpacity>
+        </View>
+      ) : null}
     </View>
   );
 }
 
-function CircleBtn({ icon, onPress }: { icon: keyof typeof Ionicons.glyphMap; onPress: () => void }) {
+function CircleBtn({ icon, onPress, badge }: { icon: keyof typeof Ionicons.glyphMap; onPress: () => void; badge?: number }) {
   return (
     <TouchableOpacity style={styles.circle} onPress={onPress} activeOpacity={0.85}>
       <Ionicons name={icon} size={22} color={Palette.forest} />
+      {badge ? (
+        <View style={styles.badge}>
+          <Text style={styles.badgeText}>{badge}</Text>
+        </View>
+      ) : null}
     </TouchableOpacity>
   );
 }
@@ -171,6 +214,19 @@ const styles = scaledSheet({
     justifyContent: 'center',
     ...Shadow.soft,
   },
+
+  badge: { position: 'absolute', top: 6, right: 6, minWidth: 17, height: 17, borderRadius: 9, backgroundColor: Palette.amber, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
+  badgeText: { fontFamily: Font.bold, fontSize: 10, color: Palette.white },
+  listHead: { gap: Spacing.sm, marginBottom: Spacing.xs },
+  count: { fontFamily: Font.semibold, fontSize: 13, color: Palette.mist },
+  sorts: { gap: Spacing.sm },
+  sort: { paddingHorizontal: Spacing.md, paddingVertical: 7, borderRadius: Radius.pill, backgroundColor: Palette.surface, borderWidth: 1, borderColor: Palette.line },
+  sortOn: { backgroundColor: Palette.ink, borderColor: Palette.ink },
+  sortText: { fontFamily: Font.semibold, fontSize: 13, color: Palette.inkSoft },
+  sortTextOn: { color: Palette.white },
+  empty: { alignItems: 'center', gap: 6, paddingVertical: 60 },
+  emptyTitle: { fontFamily: Font.displaySemi, fontSize: 16, color: Palette.ink },
+  emptyText: { fontFamily: Font.regular, fontSize: 14, color: Palette.mist },
 
   fabStack: { position: 'absolute', right: 20, gap: Spacing.md, alignItems: 'center' },
   smallFab: {

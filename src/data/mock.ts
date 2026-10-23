@@ -208,6 +208,99 @@ export const STATIONS: Station[] = [
   },
 ];
 
+// ---- Ratings, reviews and amenities near each station ----
+export interface Review {
+  id: string;
+  name: string;
+  stars: number;
+  date: string;
+  text: string;
+}
+export type AmenityKind = 'food' | 'cafe' | 'restroom' | 'wifi' | 'parking' | 'atm' | 'shopping' | 'pharmacy';
+export interface Amenity {
+  kind: AmenityKind;
+  name: string;
+  distanceM: number;
+}
+export interface StationExtras {
+  rating: number;
+  reviewCount: number;
+  /** share of reviews per star, 5★ first */
+  breakdown: [number, number, number, number, number];
+  reviews: Review[];
+  amenities: Amenity[];
+}
+
+const REVIEWS: Review[] = [
+  { id: 'r1', name: 'Rohit S.', stars: 5, date: '2 days ago', text: 'Plug worked first time and the app showed the live charge the whole way. Clean, well-lit spot.' },
+  { id: 'r2', name: 'Ananya K.', stars: 4, date: '1 week ago', text: 'Good speed. One connector was in use, so I waited about 10 minutes.' },
+  { id: 'r3', name: 'Vikram P.', stars: 5, date: '3 weeks ago', text: 'Easy QR start, and there’s a café right next door while you wait.' },
+];
+
+export const STATION_EXTRAS: Record<string, StationExtras> = {
+  'evi-test-1': {
+    rating: 4.6, reviewCount: 128, breakdown: [0.72, 0.18, 0.06, 0.02, 0.02], reviews: REVIEWS,
+    amenities: [
+      { kind: 'cafe', name: 'Café Coffee Day', distanceM: 80 },
+      { kind: 'restroom', name: 'Restroom', distanceM: 40 },
+      { kind: 'food', name: 'Food court', distanceM: 220 },
+      { kind: 'atm', name: 'HDFC ATM', distanceM: 300 },
+      { kind: 'wifi', name: 'Free Wi-Fi', distanceM: 0 },
+    ],
+  },
+  'demo-hub-north': {
+    rating: 4.4, reviewCount: 86, breakdown: [0.6, 0.25, 0.09, 0.04, 0.02], reviews: REVIEWS,
+    amenities: [
+      { kind: 'food', name: 'Highway dhaba', distanceM: 150 },
+      { kind: 'restroom', name: 'Restroom', distanceM: 30 },
+      { kind: 'parking', name: 'Covered parking', distanceM: 0 },
+      { kind: 'pharmacy', name: 'Apollo Pharmacy', distanceM: 450 },
+    ],
+  },
+  'demo-hub-south': {
+    rating: 4.7, reviewCount: 203, breakdown: [0.78, 0.15, 0.04, 0.02, 0.01], reviews: REVIEWS,
+    amenities: [
+      { kind: 'shopping', name: 'MGF Metropolitan Mall', distanceM: 120 },
+      { kind: 'cafe', name: 'Starbucks', distanceM: 140 },
+      { kind: 'restroom', name: 'Restroom', distanceM: 60 },
+      { kind: 'atm', name: 'SBI ATM', distanceM: 200 },
+    ],
+  },
+  'evit-test': {
+    rating: 4.2, reviewCount: 41, breakdown: [0.55, 0.25, 0.12, 0.05, 0.03], reviews: REVIEWS.slice(0, 2),
+    amenities: [
+      { kind: 'food', name: 'Haldiram’s', distanceM: 260 },
+      { kind: 'parking', name: 'Street parking', distanceM: 0 },
+    ],
+  },
+  'iit-delhi-99c': {
+    rating: 4.5, reviewCount: 57, breakdown: [0.65, 0.22, 0.08, 0.03, 0.02], reviews: REVIEWS.slice(1),
+    amenities: [
+      { kind: 'cafe', name: 'Campus café', distanceM: 90 },
+      { kind: 'wifi', name: 'Free Wi-Fi', distanceM: 0 },
+      { kind: 'restroom', name: 'Restroom', distanceM: 70 },
+    ],
+  },
+  'krishna-vihar': {
+    rating: 4.1, reviewCount: 33, breakdown: [0.5, 0.28, 0.13, 0.05, 0.04], reviews: REVIEWS.slice(0, 2),
+    amenities: [
+      { kind: 'food', name: 'Local eateries', distanceM: 180 },
+      { kind: 'pharmacy', name: 'Chemist', distanceM: 240 },
+    ],
+  },
+};
+export const stationExtras = (s: Station): StationExtras =>
+  STATION_EXTRAS[s.id] ?? { rating: 4.3, reviewCount: 12, breakdown: [0.6, 0.2, 0.1, 0.05, 0.05], reviews: [], amenities: [] };
+
+/** "Open now" for the prototype: 24-hour stations always, others between their hours. */
+export const isOpenNow = (s: Station, now = new Date()) => {
+  if (s.hours === '24 Hours') return true;
+  const m = s.hours.match(/(\d{2}):(\d{2}).*?(\d{2}):(\d{2})/);
+  if (!m) return true;
+  const mins = now.getHours() * 60 + now.getMinutes();
+  return mins >= +m[1] * 60 + +m[2] && mins < +m[3] * 60 + +m[4];
+};
+
 // ---- Station helpers ----
 export const stationConnectors = (s: Station) => s.chargers.flatMap((ch) => ch.connectors);
 export const freeConnectorCount = (s: Station) =>
@@ -262,21 +355,6 @@ export const ACCOUNT = {
   walletBalance: 16289.0,
 };
 
-// ---- Active charging session (Sessions tab, live view) ----
-export const ACTIVE_SESSION = {
-  stationName: 'EVI-Test-1',
-  connectorLabel: 'EVIT-05 · Connector 1',
-  mode: 'AC CHARGING',
-  powerKw: 3.4,
-  energyKwh: 1.08,
-  duration: '19m 23s',
-  costINR: 10.8,
-  status: 'Charging' as const,
-};
-
-// Small pill above the tab bar showing the running session.
-export const MINI_SESSION = { stationName: 'EVI-Test-1', energyKwh: 1.1 };
-
 // ---- Vehicles ----
 export interface Vehicle {
   id: string;
@@ -285,6 +363,8 @@ export interface Vehicle {
   model: string;
   plate?: string;
   connectors: ConnectorKey[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  photo?: any;
 }
 // BYD Seal supports Type-2 (AC) and CCS (DC), per the vehicle connector list.
 export const VEHICLES: Vehicle[] = [
@@ -321,7 +401,6 @@ export interface SessionRecord {
   energyKwh: number;
   reason: string;
 }
-export const HISTORY_MONTH = { label: 'OCTOBER 2026', totalKwh: 18.39, totalINR: 186.29 };
 export const SESSION_HISTORY: SessionRecord[] = [
   { id: 'h1', station: 'EVI-Test-1', connectorLabel: 'EVIT-05 · Connector 1', dateLabel: '22 Oct 2026, 15:07', costINR: 23.7, energyKwh: 2.37, reason: 'Stopped from the app' },
   { id: 'h2', station: 'EVI-Test-1', connectorLabel: 'EVIT-05 · Connector 1', dateLabel: '22 Oct 2026, 12:27', costINR: 17.7, energyKwh: 1.77, reason: 'Reached your time limit' },
@@ -357,6 +436,43 @@ export const TICKETS: Ticket[] = [
   { id: 't3', title: 'Charging session ended very early', dateLabel: '10 Oct 2026', priority: 'Medium priority', status: 'Open', body: 'Auto-raised for session 6d76abe3-82a9-448e-a91e-fe83ec373664 on charger EVIT-05.' },
   { id: 't4', title: 'Charging session ended very early', dateLabel: '10 Oct 2026', priority: 'Medium priority', status: 'Open', body: 'Auto-raised for session 1f2a9c70-11bb-4e3a-9f0d-aa2290 be0c21 on charger EVIT-05.' },
 ];
+
+// ---- Wallet ----
+export interface WalletTxn {
+  id: string;
+  kind: 'topup' | 'charge' | 'refund' | 'plan';
+  title: string;
+  dateLabel: string;
+  amount: number; // + credit, − debit
+}
+export const WALLET_TXNS: WalletTxn[] = [
+  { id: 'w1', kind: 'charge', title: 'Charging · EVI-Test-1', dateLabel: '22 Oct, 15:07', amount: -23.7 },
+  { id: 'w2', kind: 'charge', title: 'Charging · EVI-Test-1', dateLabel: '22 Oct, 12:27', amount: -17.7 },
+  { id: 'w3', kind: 'topup', title: 'Added via UPI', dateLabel: '21 Oct, 19:02', amount: 2000 },
+  { id: 'w4', kind: 'refund', title: 'Refund · session ended early', dateLabel: '12 Oct, 14:40', amount: 8.2 },
+  { id: 'w5', kind: 'plan', title: 'EVIT Lite · monthly', dateLabel: '1 Oct, 09:00', amount: -199 },
+];
+export const TOPUP_AMOUNTS = [200, 500, 1000, 2000];
+
+// ---- Help & FAQs ----
+export interface Faq {
+  id: string;
+  topic: 'Charging' | 'Payments' | 'Account' | 'App';
+  q: string;
+  a: string;
+}
+export const FAQS: Faq[] = [
+  { id: 'f1', topic: 'Charging', q: 'How do I start charging?', a: 'Plug the connector into your car, then scan the QR code on the charger (or enter the charger ID printed below it). Tap Start, and charging begins within a few seconds.' },
+  { id: 'f2', topic: 'Charging', q: 'Why can’t I see my battery % on an AC charger?', a: 'AC chargers don’t receive battery information from the car, so the app shows power, energy, time and cost instead. DC fast chargers do read it, so you’ll see your battery % there.' },
+  { id: 'f3', topic: 'Charging', q: 'How do I stop a session?', a: 'Open the Charging tab and tap Stop charging. You can also stop from the car or by unplugging, depending on the charger.' },
+  { id: 'f4', topic: 'Payments', q: 'How am I charged?', a: 'You pay per kWh of energy delivered, at the price shown on the station page. The amount is taken from your EVIT wallet when the session ends.' },
+  { id: 'f5', topic: 'Payments', q: 'How do I add money to my wallet?', a: 'Go to Account → Wallet, pick or type an amount, choose UPI or card, and confirm. The balance updates right away.' },
+  { id: 'f6', topic: 'Payments', q: 'Where are my receipts?', a: 'Every session has a receipt. Open Charging history and tap Receipt on any session.' },
+  { id: 'f7', topic: 'Account', q: 'Can I change my phone number?', a: 'Your phone number is your login, so it can’t be changed in the app. Raise a ticket and our team will help.' },
+  { id: 'f8', topic: 'App', q: 'The charger shows offline. What now?', a: 'Try another connector at the same station, or pick a nearby station from the map. If it stays offline, raise a ticket so we can check it.' },
+];
+
+export const SUPPORT_CONTACT = { phone: '+91 1800 120 3848', email: 'support@evitpl.com', hours: 'Mon–Sat, 9 am – 7 pm' };
 
 // Filter sheet options
 export const CATEGORIES = ['AC', 'DC'] as const;

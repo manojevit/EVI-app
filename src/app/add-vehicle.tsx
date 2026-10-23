@@ -11,6 +11,7 @@ import VoltButton from '@/components/volt-button';
 import { scaledSheet } from '@/constants/responsive';
 import { Font, Palette, Radius, Spacing } from '@/constants/theme';
 import { CONNECTORS } from '@/data/connectors';
+import { addVehicle } from '@/data/app-store';
 import { CATALOG_MAKES, VEHICLE_CATALOG, type CatalogCar } from '@/data/vehicle-catalog';
 
 /** Short badge text for a brand: "BMW", "Tata Motors" → "TM", "MG Motor" → "MG". */
@@ -56,6 +57,18 @@ export default function AddVehicleSheet() {
   const pickModel = (m: string) => {
     setModelName(m);
     setLook(0);
+  };
+  const save = () => {
+    if (!car) return;
+    addVehicle({
+      type: 'LMV',
+      make: car.make,
+      model: car.model,
+      plate: plate.trim().toUpperCase() || undefined,
+      connectors: car.connectors,
+      photo: photos[Math.min(look, photos.length - 1)],
+    });
+    router.back();
   };
 
   return (
@@ -209,7 +222,7 @@ export default function AddVehicleSheet() {
             <TextInput value={plate} onChangeText={setPlate} placeholder="e.g. DL 01 AB 1234" placeholderTextColor={Palette.mistLight} autoCapitalize="characters" style={styles.input} />
           </View>
 
-          <VoltButton label="Add vehicle" icon="add" disabled={!car} onPress={() => router.back()} style={{ marginTop: Spacing.xxl }} />
+          <VoltButton label="Add vehicle" icon="add" disabled={!car} onPress={save} style={{ marginTop: Spacing.xxl }} />
         </ScrollView>
       </View>
     </View>
@@ -258,7 +271,7 @@ const styles = scaledSheet({
   sheet: { backgroundColor: Palette.canvas, borderTopLeftRadius: 30, borderTopRightRadius: 30, paddingHorizontal: Spacing.xl, paddingTop: Spacing.md, maxHeight: '94%' },
   grabber: { alignSelf: 'center', width: 44, height: 5, borderRadius: 3, backgroundColor: Palette.line, marginBottom: Spacing.md },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing.lg },
-  title: { fontFamily: Font.display, fontSize: 24, color: Palette.ink },
+  title: { fontFamily: Font.display, fontSize: 22, color: Palette.ink },
   close: { width: 36, height: 36, borderRadius: 18, backgroundColor: Palette.surface, alignItems: 'center', justifyContent: 'center' },
 
   preview: { alignItems: 'center', borderRadius: Radius.card, padding: Spacing.lg, borderWidth: 1, borderColor: Palette.brandTint2 },

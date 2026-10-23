@@ -53,7 +53,11 @@ export default function RootLayout() {
           <Stack.Screen name="profile" />
           <Stack.Screen name="vehicles" />
           <Stack.Screen name="plans" />
-          <Stack.Screen name="support" />
+          <Stack.Screen name="help" />
+          <Stack.Screen name="tickets" />
+          <Stack.Screen name="ticket/[id]" />
+          <Stack.Screen name="new-ticket" />
+          <Stack.Screen name="receipt/[id]" />
           <Stack.Screen name="settings" />
           <Stack.Screen name="wallet" />
           <Stack.Screen name="scan" />

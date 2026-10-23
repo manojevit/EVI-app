@@ -9,13 +9,14 @@ import AppHeader from '@/components/app-header';
 import ConnectorIcon from '@/components/connector-icon';
 import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
 import { CONNECTORS } from '@/data/connectors';
-import { VEHICLES } from '@/data/mock';
+import { removeVehicle, useAppStore } from '@/data/app-store';
 import { vehiclePhoto } from '@/data/vehicle-images';
 import { VEHICLE_TYPES } from '@/data/vehicles';
 import { scaledSheet } from '@/constants/responsive';
 
 export default function VehiclesScreen() {
   const router = useRouter();
+  const vehicles = useAppStore((st) => st.vehicles);
   return (
     <View style={styles.container}>
       <AppHeader
@@ -30,9 +31,9 @@ export default function VehiclesScreen() {
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <Text style={styles.heading}>My vehicles</Text>
 
-        {VEHICLES.map((v) => {
+        {vehicles.map((v) => {
           const type = VEHICLE_TYPES.find((t) => t.key === v.type) ?? VEHICLE_TYPES[2];
-          const photo = vehiclePhoto(v.model);
+          const photo = v.photo ?? vehiclePhoto(v.model);
           return (
             <View key={v.id} style={styles.card}>
               <LinearGradient colors={Palette.gradHero} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.art}>
@@ -52,7 +53,7 @@ export default function VehiclesScreen() {
                     <Text style={styles.name}>{v.model}</Text>
                     <Text style={styles.make}>{v.make}{v.plate ? ` · ${v.plate}` : ''}</Text>
                   </View>
-                  <TouchableOpacity hitSlop={10} style={styles.trash}>
+                  <TouchableOpacity hitSlop={10} style={styles.trash} onPress={() => removeVehicle(v.id)} accessibilityLabel={`Remove ${v.model}`}>
                     <Ionicons name="trash-outline" size={20} color={Palette.mist} />
                   </TouchableOpacity>
                 </View>
@@ -88,7 +89,7 @@ export default function VehiclesScreen() {
 const styles = scaledSheet({
   container: { flex: 1, backgroundColor: Palette.canvas },
   scroll: { padding: Spacing.lg, gap: Spacing.lg, paddingBottom: 120 },
-  heading: { fontFamily: Font.display, fontSize: 24, color: Palette.ink },
+  heading: { fontFamily: Font.display, fontSize: 22, color: Palette.ink },
   add: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: Palette.volt, borderRadius: Radius.pill, paddingHorizontal: Spacing.md, paddingVertical: 8 },
   addText: { fontFamily: Font.bold, fontSize: 15, color: Palette.white },
 
