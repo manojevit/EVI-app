@@ -3,6 +3,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import Animated, {
+  cancelAnimation,
   Easing,
   Extrapolation,
   interpolate,
@@ -13,6 +14,7 @@ import Animated, {
   useReducedMotion,
   useSharedValue,
   withDelay,
+  withRepeat,
   withSequence,
   withSpring,
   withTiming,
@@ -53,6 +55,7 @@ const T = {
 };
 
 const RING = 232;
+const GROUP = RING + 72; // ring + gauge ticks
 const STROKE = 10;
 const R = (RING - STROKE) / 2;
 const CIRC = 2 * Math.PI * R;
@@ -94,6 +97,18 @@ const SPARKS = Array.from({ length: 28 }, (_, i) => {
   };
 });
 
+// Energy streaming into the ring while it charges.
+const INTAKE = Array.from({ length: 22 }, (_, i) => ({
+  angle: (i / 22) * Math.PI * 2 + (rand(i, 7) - 0.5) * 0.25,
+  offset: rand(i, 8),
+  from: 210 + rand(i, 9) * 90,
+  length: 8 + rand(i, 10) * 14,
+}));
+// Gauge ticks around the ring that light up as the charge passes them.
+const TICKS = 60;
+const TICK_R = R + 20;
+const LIME = '#B6F09C';
+
 function haptic(kind: 'tick' | 'wind' | 'strike') {
   if (Platform.OS === 'web') return;
   const style =
@@ -126,6 +141,51 @@ function Spark({ s, burst }: { s: (typeof SPARKS)[number]; burst: SharedValue<nu
     <Animated.View
       style={[styles.abs, { width: s.length, height: s.thick, borderRadius: s.thick, backgroundColor: s.color }, style]}
     />
+  );
+}
+
+function IntakeStreak({
+  p,
+  clock,
+  intake,
+}: {
+  p: (typeof INTAKE)[number];
+  clock: SharedValue<number>;
+  intake: SharedValue<number>;
+}) {
+  const style = useAnimatedStyle(() => {
+    const phase = (clock.value + p.offset) % 1;
+    const eased = phase * phase; // accelerates as it gets pulled in
+    const r = p.from + (R + 8 - p.from) * eased;
+    return {
+      opacity: intake.value * Math.sin(phase * Math.PI) * 0.9,
+      transform: [
+        { translateX: Math.cos(p.angle) * r },
+        { translateY: Math.sin(p.angle) * r },
+        { rotate: `${p.angle}rad` },
+        { scaleX: 0.5 + eased * 1.1 },
+      ],
+    };
+  });
+  return <Animated.View style={[styles.abs, styles.intake, { width: p.length }, style]} />;
+}
+
+function Tick({ i, progress, track }: { i: number; progress: SharedValue<number>; track: SharedValue<number> }) {
+  const at = i / TICKS;
+  const style = useAnimatedStyle(() => {
+    const lit = interpolate(progress.value, [at - 0.001, at + 0.04], [0, 1], Extrapolation.CLAMP);
+    return {
+      opacity: track.value * (0.18 + lit * 0.82),
+      backgroundColor: lit > 0.5 ? Palette.volt : Palette.brandTint2,
+      transform: [{ scaleY: 1 + lit * (i % 5 === 0 ? 0.9 : 0.4) }],
+    };
+  });
+  return (
+    <View style={[StyleSheet.absoluteFill, styles.center, { transform: [{ rotate: `${at * 360}deg` }] }]} pointerEvents="none">
+      <View style={{ transform: [{ translateY: -TICK_R }] }}>
+        <Animated.View style={[styles.tickBar, i % 5 === 0 && styles.tickMajor, style]} />
+      </View>
+    </View>
   );
 }
 
@@ -221,7 +281,12 @@ export default function ChargeUpIntro({ onDone }: { onDone: () => void }) {
   const shake = useSharedValue(0);
   const glow = useSharedValue(0);
   const flood = useSharedValue(0);
+  const floodLead = useSharedValue(0); // lighter wave running just ahead of the flood
   const sheen = useSharedValue(0);
+  const clock = useSharedValue(0); // looping 0..1 for the intake stream
+  const intake = useSharedValue(0);
+  const split = useSharedValue(0); // RGB-split glitch on the bolt
+  const flicker = useSharedValue(0); // neon power-on of the logo
   const logoB = useSharedValue(0);
   const tagline = useSharedValue(0);
   const exit = useSharedValue(0);
@@ -232,6 +297,7 @@ export default function ChargeUpIntro({ onDone }: { onDone: () => void }) {
       logoA.value = withDelay(400, withTiming(1, { duration: 300 }));
       flood.value = withDelay(400, withTiming(1, { duration: 300 }));
       logoB.value = withDelay(500, withTiming(1, { duration: 300 }));
+      flicker.value = withDelay(500, withTiming(1, { duration: 300 }));
       tagline.value = withDelay(600, withTiming(1, { duration: 300 }));
       const t = setTimeout(onDone, 1600);
       return () => clearTimeout(t);
@@ -248,6 +314,11 @@ export default function ChargeUpIntro({ onDone }: { onDone: () => void }) {
     lift.value = withDelay(T.lift, withTiming(1, { duration: 220, easing: inOut }));
     track.value = withDelay(T.lift, withTiming(1, { duration: 260, easing: easeOut }));
     counter.value = withDelay(T.charge, withSpring(1, SPRING_SOFT));
+    clock.value = withRepeat(withTiming(1, { duration: 760, easing: Easing.linear }), -1, false);
+    intake.value = withSequence(
+      withDelay(T.charge, withTiming(1, { duration: 300 })),
+      withDelay(T.wind - T.charge - 300 - 120, withTiming(0, { duration: 200 })),
+    );
     progress.value = withDelay(T.charge, withTiming(1, { duration: T.chargeMs, easing: Easing.bezier(0.55, 0, 0.25, 1) }));
     glow.value = withSequence(
       withDelay(T.lift, withTiming(0.55, { duration: T.wind - T.lift, easing: Easing.in(Easing.quad) })),
@@ -259,6 +330,15 @@ export default function ChargeUpIntro({ onDone }: { onDone: () => void }) {
     wind.value = withDelay(T.wind, withTiming(1, { duration: T.strike - T.wind, easing: easeIn }));
     blast.value = withDelay(T.strike, withTiming(1, { duration: 420, easing: easeOutExpo }));
     bolt.value = withDelay(T.strike, withSpring(1, SPRING_POP));
+    split.value = withDelay(
+      T.strike,
+      withSequence(
+        withTiming(1, { duration: 40 }),
+        withTiming(0.35, { duration: 60 }),
+        withTiming(0.8, { duration: 50 }),
+        withTiming(0, { duration: 180, easing: easeOut }),
+      ),
+    );
     burst.value = withDelay(T.strike, withTiming(1, { duration: 760, easing: easeOutExpo }));
     shockA.value = withDelay(T.strike, withTiming(1, { duration: 700, easing: easeOut }));
     shockB.value = withDelay(T.strike + 90, withTiming(1, { duration: 760, easing: easeOut }));
@@ -274,7 +354,18 @@ export default function ChargeUpIntro({ onDone }: { onDone: () => void }) {
     );
 
     // 4. green flood, bolt hands over to the white logo
-    flood.value = withDelay(T.flood, withTiming(1, { duration: 520, easing: inOut }));
+    floodLead.value = withDelay(T.flood - 40, withTiming(1, { duration: 520, easing: inOut }));
+    flood.value = withDelay(T.flood + 50, withTiming(1, { duration: 520, easing: inOut }));
+    flicker.value = withDelay(
+      T.logoIn,
+      withSequence(
+        withTiming(1, { duration: 40 }),
+        withTiming(0.2, { duration: 50 }),
+        withTiming(0.9, { duration: 40 }),
+        withTiming(0.4, { duration: 70 }),
+        withTiming(1, { duration: 90 }),
+      ),
+    );
     boltWhite.value = withDelay(T.flood + 120, withTiming(1, { duration: 200 }));
     boltOut.value = withDelay(T.boltOut, withTiming(1, { duration: 340, easing: inOut }));
     logoB.value = withDelay(T.logoIn, withSpring(1, SPRING_SOFT));
@@ -289,6 +380,7 @@ export default function ChargeUpIntro({ onDone }: { onDone: () => void }) {
         if (finished) runOnJS(onDone)();
       }),
     );
+    return () => cancelAnimation(clock);
     // shared values are stable; run once
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reduceMotion]);
@@ -326,6 +418,19 @@ export default function ChargeUpIntro({ onDone }: { onDone: () => void }) {
     transform: [{ scale: 0.86 + track.value * 0.14 }],
   }));
   const ringProps = useAnimatedProps(() => ({ strokeDashoffset: CIRC * (1 - progress.value) }));
+  const ringGlowProps = useAnimatedProps(() => ({ strokeDashoffset: CIRC * (1 - progress.value) }));
+  const labelCharging = useAnimatedStyle(() => ({ opacity: interpolate(progress.value, [0.97, 1], [1, 0], Extrapolation.CLAMP) }));
+  const labelFull = useAnimatedStyle(() => {
+    const t = interpolate(progress.value, [0.97, 1], [0, 1], Extrapolation.CLAMP);
+    return { opacity: t, transform: [{ translateY: (1 - t) * 6 }] };
+  });
+  const ghostLime = useAnimatedStyle(() => ({ opacity: split.value * 0.85, transform: [{ translateX: -9 * split.value }, { translateY: 3 * split.value }] }));
+  const ghostDeep = useAnimatedStyle(() => ({ opacity: split.value * 0.75, transform: [{ translateX: 9 * split.value }, { translateY: -3 * split.value }] }));
+  const floodLeadStyle = useAnimatedStyle(() => {
+    // leads on the way out, lags on the way back in — a two-tone wave edge both times
+    const s = floodLead.value * (1 - Math.pow(exit.value, 1.6));
+    return { opacity: s > 0.001 ? 1 : 0, transform: [{ scale: s }] };
+  });
   const cometSpin = useAnimatedStyle(() => ({ transform: [{ rotate: `${progress.value * 360}deg` }] }));
   const cometDot = useAnimatedStyle(() => ({
     opacity: dot.value > 0.01 ? 1 : 0,
@@ -365,7 +470,7 @@ export default function ChargeUpIntro({ onDone }: { onDone: () => void }) {
     transform: [{ translateY: -exit.value * 18 }, { scale: 1 - exit.value * 0.12 }],
   }));
   const logoBStyle = useAnimatedStyle(() => ({
-    opacity: Math.min(logoB.value * 1.4, 1),
+    opacity: flicker.value,
     transform: [{ scale: 0.94 + logoB.value * 0.06 }], // small, so the logo's bolt lands where ours went
   }));
   const hintStyle = useAnimatedStyle(() => ({ opacity: hint.value * 0.7 }));
@@ -392,9 +497,17 @@ export default function ChargeUpIntro({ onDone }: { onDone: () => void }) {
           <BrandLogo height={SPLASH_LOGO_H} />
         </Animated.View>
 
+        {/* energy streaming in */}
+        {INTAKE.map((p, i) => (
+          <IntakeStreak key={i} p={p} clock={clock} intake={intake} />
+        ))}
+
         {/* charging group */}
-        <Animated.View style={[styles.abs, { width: RING, height: RING }, chargeGroup]}>
-          <Animated.View style={[StyleSheet.absoluteFill, trackStyle]}>
+        <Animated.View style={[styles.abs, { width: GROUP, height: GROUP }, chargeGroup]}>
+          {Array.from({ length: TICKS }, (_, i) => (
+            <Tick key={i} i={i} progress={progress} track={track} />
+          ))}
+          <Animated.View style={[StyleSheet.absoluteFill, styles.center, trackStyle]}>
             <Svg width={RING} height={RING}>
               <Defs>
                 <SvgGradient id="introRing" x1="0" y1="0" x2="1" y2="1">
@@ -403,6 +516,20 @@ export default function ChargeUpIntro({ onDone }: { onDone: () => void }) {
                 </SvgGradient>
               </Defs>
               <Circle cx={RING / 2} cy={RING / 2} r={R} stroke={Palette.voltSoft} strokeWidth={STROKE} fill="none" />
+              {/* soft glow under the arc */}
+              <AnimatedCircle
+                cx={RING / 2}
+                cy={RING / 2}
+                r={R}
+                stroke={Palette.volt}
+                strokeOpacity={0.16}
+                strokeWidth={STROKE + 14}
+                strokeLinecap="round"
+                strokeDasharray={`${CIRC} ${CIRC}`}
+                animatedProps={ringGlowProps}
+                fill="none"
+                transform={`rotate(-90 ${RING / 2} ${RING / 2})`}
+              />
               <AnimatedCircle
                 cx={RING / 2}
                 cy={RING / 2}
@@ -428,7 +555,10 @@ export default function ChargeUpIntro({ onDone }: { onDone: () => void }) {
 
           <Animated.View style={[StyleSheet.absoluteFill, styles.center, counterStyle]}>
             <Odometer progress={progress} />
-            <Text style={styles.counterLabel}>Charging up</Text>
+            <View style={styles.labelBox}>
+              <Animated.Text style={[styles.counterLabel, labelCharging]}>Charging up</Animated.Text>
+              <Animated.Text style={[styles.counterLabel, styles.labelFull, labelFull]}>Fully charged</Animated.Text>
+            </View>
           </Animated.View>
         </Animated.View>
 
@@ -439,7 +569,11 @@ export default function ChargeUpIntro({ onDone }: { onDone: () => void }) {
           <Spark key={i} s={s} burst={burst} />
         ))}
 
-        {/* brand-green flood */}
+        {/* brand-green flood, with a lighter wave on its edge */}
+        <Animated.View
+          pointerEvents="none"
+          style={[styles.abs, { width: floodD, height: floodD, borderRadius: floodD / 2, backgroundColor: Palette.gradEnergy[0] }, floodLeadStyle]}
+        />
         <Animated.View
           pointerEvents="none"
           style={[styles.abs, { width: floodD, height: floodD, borderRadius: floodD / 2, overflow: 'hidden' }, floodStyle]}>
@@ -456,6 +590,17 @@ export default function ChargeUpIntro({ onDone }: { onDone: () => void }) {
 
         {/* bolt: strikes green, turns white as the flood passes */}
         <Animated.View style={[styles.abs, { width: BOLT_W, height: BOLT_H }, boltStyle]} pointerEvents="none">
+          {/* RGB-split glitch copies */}
+          <Animated.View style={[StyleSheet.absoluteFill, ghostLime]}>
+            <Svg width={BOLT_W} height={BOLT_H} viewBox="0 0 96 140">
+              <Path d={BOLT_PATH} fill={LIME} />
+            </Svg>
+          </Animated.View>
+          <Animated.View style={[StyleSheet.absoluteFill, ghostDeep]}>
+            <Svg width={BOLT_W} height={BOLT_H} viewBox="0 0 96 140">
+              <Path d={BOLT_PATH} fill={Palette.forestDeep} />
+            </Svg>
+          </Animated.View>
           <Svg width={BOLT_W} height={BOLT_H} viewBox="0 0 96 140">
             <Path d={BOLT_PATH} fill={Palette.volt} />
           </Svg>
@@ -506,7 +651,12 @@ const styles = StyleSheet.create({
     includeFontPadding: false,
   },
   pct: { fontFamily: Font.displaySemi, fontSize: 24, color: Palette.mist, marginBottom: 10, marginLeft: 2 },
-  counterLabel: { fontFamily: Font.medium, fontSize: 13, color: Palette.mist, marginTop: 2, letterSpacing: 0.3 },
+  labelBox: { width: 160, height: 18, marginTop: 2 },
+  labelFull: { position: 'absolute', left: 0, right: 0, color: Palette.forest, fontFamily: Font.semibold },
+  intake: { height: 2.5, borderRadius: 2, backgroundColor: Palette.volt },
+  tickBar: { width: 2, height: 7, borderRadius: 1 },
+  tickMajor: { width: 3, height: 10 },
+  counterLabel: { fontFamily: Font.medium, fontSize: 13, lineHeight: 18, color: Palette.mist, letterSpacing: 0.3, textAlign: 'center' },
 
   sheen: { position: 'absolute', top: 0, width: 140, alignSelf: 'center' },
 
