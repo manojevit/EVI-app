@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import BrandLogo from '@/components/brand-logo';
 import VoltButton from '@/components/volt-button';
 import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
+import { scaledSheet } from '@/constants/responsive';
 
 const LENGTH = 6;
 const RESEND_SECONDS = 30;
@@ -157,7 +158,7 @@ export default function OtpScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = scaledSheet({
   container: { flex: 1, backgroundColor: Palette.canvas },
   scroll: { flexGrow: 1, paddingHorizontal: Spacing.xxl },
 

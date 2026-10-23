@@ -29,6 +29,7 @@ import Svg, { Circle } from 'react-native-svg';
 import BrandLogo from '@/components/brand-logo';
 import OnboardingMap from '@/components/onboarding-map';
 import { projectFromCenter } from '@/constants/map-style';
+import { fs } from '@/constants/responsive';
 import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
 import { STATIONS } from '@/data/mock';
 
@@ -655,7 +656,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.xxl,
     marginBottom: Spacing.lg,
   },
-  skip: { fontFamily: Font.semibold, fontSize: 15, color: Palette.mist },
+  skip: { fontFamily: Font.semibold, fontSize: fs(15), color: Palette.mist },
 
   visual: {
     borderRadius: Radius.hero,
@@ -665,16 +666,16 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: Font.display,
-    fontSize: 32,
-    lineHeight: 38,
+    fontSize: fs(32),
+    lineHeight: fs(38),
     color: Palette.ink,
     marginTop: Spacing.xxl,
     letterSpacing: -0.4,
   },
   body: {
     fontFamily: Font.regular,
-    fontSize: 16,
-    lineHeight: 23,
+    fontSize: fs(16),
+    lineHeight: fs(23),
     color: Palette.mist,
     marginTop: Spacing.md,
     maxWidth: 330,
@@ -779,7 +780,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
   },
-  foundText: { fontFamily: Font.bold, fontSize: 11, color: Palette.white },
+  foundText: { fontFamily: Font.bold, fontSize: fs(11), color: Palette.white },
   scanShock: {
     width: 200,
     height: 200,
@@ -866,7 +867,7 @@ const styles = StyleSheet.create({
   },
   orbitLabel: {
     fontFamily: Font.bold,
-    fontSize: 11,
+    fontSize: fs(11),
     color: Palette.forest,
     marginTop: 4,
   },
@@ -909,8 +910,8 @@ const styles = StyleSheet.create({
   },
   coinSymbol: {
     fontFamily: Font.display,
-    fontSize: 70,
-    lineHeight: 82,
+    fontSize: fs(70),
+    lineHeight: fs(82),
     color: Palette.white,
   },
   kwhPill: {
@@ -924,7 +925,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     ...Shadow.soft,
   },
-  kwhText: { fontFamily: Font.bold, fontSize: 13, color: Palette.forest },
+  kwhText: { fontFamily: Font.bold, fontSize: fs(13), color: Palette.forest },
 
   // footer
   footer: {
@@ -948,5 +949,5 @@ const styles = StyleSheet.create({
   },
   ringBox: { alignItems: 'flex-end', justifyContent: 'center' },
   nextInner: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  nextLabel: { fontFamily: Font.bold, fontSize: 16, color: Palette.white },
+  nextLabel: { fontFamily: Font.bold, fontSize: fs(16), color: Palette.white },
 });

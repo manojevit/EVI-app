@@ -9,6 +9,7 @@ import { MiniBars } from '@/components/energy-bars';
 import VoltButton from '@/components/volt-button';
 import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
 import { ACCOUNT, formatINR } from '@/data/mock';
+import { scaledSheet } from '@/constants/responsive';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
@@ -85,7 +86,7 @@ export default function AccountScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = scaledSheet({
   container: { flex: 1, backgroundColor: Palette.canvas },
   scroll: { padding: Spacing.lg, paddingBottom: 130, gap: Spacing.lg },
 

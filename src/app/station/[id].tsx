@@ -8,6 +8,7 @@ import ConnectorIcon from '@/components/connector-icon';
 import VoltButton from '@/components/volt-button';
 import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
 import { CONNECTORS } from '@/data/connectors';
+import { scaledSheet } from '@/constants/responsive';
 import {
   STATIONS,
   VEHICLES,
@@ -216,7 +217,7 @@ function ConnectorRow({ connector, offline, fits }: { connector: Connector; offl
   );
 }
 
-const styles = StyleSheet.create({
+const styles = scaledSheet({
   container: { flex: 1, backgroundColor: Palette.canvas },
   scroll: { padding: Spacing.lg, paddingBottom: 48, gap: Spacing.md },
 

@@ -6,6 +6,7 @@ import AppHeader from '@/components/app-header';
 import VoltButton from '@/components/volt-button';
 import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
 import { PLANS } from '@/data/mock';
+import { scaledSheet } from '@/constants/responsive';
 
 const FEATURES: Record<string, string[]> = {
   lite: ['20 kWh included every month', 'Works at all EVIT chargers', 'In-app support'],
@@ -69,7 +70,7 @@ export default function PlansScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = scaledSheet({
   container: { flex: 1, backgroundColor: Palette.canvas },
   scroll: { padding: Spacing.lg, gap: Spacing.lg, paddingBottom: 48 },
   title: { fontFamily: Font.display, fontSize: 26, color: Palette.ink },

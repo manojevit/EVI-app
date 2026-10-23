@@ -7,6 +7,7 @@ import AppHeader from '@/components/app-header';
 import VoltButton from '@/components/volt-button';
 import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
 import { ACCOUNT } from '@/data/mock';
+import { scaledSheet } from '@/constants/responsive';
 
 export default function ProfileScreen() {
   const [name, setName] = useState(ACCOUNT.name);
@@ -61,7 +62,7 @@ function Field({ label, icon, children }: { label: string; icon: keyof typeof Io
   );
 }
 
-const styles = StyleSheet.create({
+const styles = scaledSheet({
   container: { flex: 1, backgroundColor: Palette.canvas },
   scroll: { padding: Spacing.lg, paddingBottom: 100, gap: Spacing.lg },
   avatarRing: { alignSelf: 'center', width: 132, height: 132, borderRadius: 66, backgroundColor: Palette.voltSoft, alignItems: 'center', justifyContent: 'center', marginTop: Spacing.sm },

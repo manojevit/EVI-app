@@ -3,6 +3,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { StyleSheet, Text, TouchableOpacity, ViewStyle } from 'react-native';
 
 import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
+import { scaledSheet } from '@/constants/responsive';
 
 type Variant = 'forest' | 'volt' | 'danger' | 'outline';
 
@@ -64,7 +65,7 @@ export default function VoltButton({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = scaledSheet({
   base: {
     flexDirection: 'row',
     alignItems: 'center',

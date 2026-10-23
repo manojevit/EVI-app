@@ -12,6 +12,7 @@ import { Font, Palette, Radius, Spacing } from '@/constants/theme';
 import { CONNECTORS } from '@/data/connectors';
 import { vehiclePhoto } from '@/data/vehicle-images';
 import { VEHICLE_TYPES, makesFor, modelsFor, type VehicleType } from '@/data/vehicles';
+import { scaledSheet } from '@/constants/responsive';
 
 export default function AddVehicleSheet() {
   const router = useRouter();
@@ -158,7 +159,7 @@ function Chip({ label, on, onPress }: { label: string; on: boolean; onPress: () 
   );
 }
 
-const styles = StyleSheet.create({
+const styles = scaledSheet({
   overlay: { flex: 1, justifyContent: 'flex-end' },
   backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(19,32,26,0.45)' },
   sheet: { backgroundColor: Palette.canvas, borderTopLeftRadius: 30, borderTopRightRadius: 30, paddingHorizontal: Spacing.xl, paddingTop: Spacing.md, maxHeight: '94%' },

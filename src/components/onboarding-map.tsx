@@ -2,6 +2,7 @@ import Constants from 'expo-constants';
 import { StyleSheet, View } from 'react-native';
 
 import GoogleMapEmbed from '@/components/google-map-embed';
+import { useMapFallback } from '@/components/use-map-fallback';
 import { MAP_STYLE, STATIONS_CAMERA } from '@/constants/map-style';
 
 // react-native-maps can't use our Maps key in Expo Go (see station-map.tsx).
@@ -24,13 +25,16 @@ if (!IS_EXPO_GO) {
  * Pins are drawn on top by the slide, using projectFromCenter().
  */
 export default function OnboardingMap() {
-  if (!Maps) return <GoogleMapEmbed />;
+  // lite mode may not report loading the same way, so this one doesn't affect the Map tab
+  const { failed, onMapLoaded } = useMapFallback({ remember: false });
+  if (!Maps || failed) return <GoogleMapEmbed />;
   const MapView = Maps.default;
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="none">
       <MapView
         style={StyleSheet.absoluteFill}
         provider={Maps.PROVIDER_GOOGLE}
+        onMapLoaded={onMapLoaded}
         liteMode
         initialCamera={{
           center: { latitude: STATIONS_CAMERA.latitude, longitude: STATIONS_CAMERA.longitude },

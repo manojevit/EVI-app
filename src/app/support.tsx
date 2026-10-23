@@ -5,6 +5,7 @@ import AppHeader from '@/components/app-header';
 import VoltButton from '@/components/volt-button';
 import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
 import { TICKETS } from '@/data/mock';
+import { scaledSheet } from '@/constants/responsive';
 
 // short session ref from the mock body, for a readable tag
 function sessionRef(body: string) {
@@ -58,7 +59,7 @@ export default function SupportScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = scaledSheet({
   container: { flex: 1, backgroundColor: Palette.canvas },
   scroll: { padding: Spacing.lg, gap: Spacing.md, paddingBottom: 120 },
   title: { fontFamily: Font.display, fontSize: 26, color: Palette.ink },

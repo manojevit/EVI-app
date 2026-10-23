@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 
 import AppHeader from '@/components/app-header';
 import { Font, Palette, Spacing } from '@/constants/theme';
+import { scaledSheet } from '@/constants/responsive';
 
 /** Placeholder screen for prototype-depth routes not yet designed. */
 export default function StubScreen({
@@ -28,7 +29,7 @@ export default function StubScreen({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = scaledSheet({
   container: { flex: 1, backgroundColor: Palette.canvas },
   body: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: Spacing.xxxl },
   circle: { width: 96, height: 96, borderRadius: 48, backgroundColor: Palette.voltSoft, alignItems: 'center', justifyContent: 'center', marginBottom: Spacing.xl },

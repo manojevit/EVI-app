@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import { StyleSheet } from 'react-native';
 
 import EmbeddedStationMap, { ChargerPin } from '@/components/embedded-station-map';
+import { useMapFallback } from '@/components/use-map-fallback';
 import { MAP_STYLE } from '@/constants/map-style';
 import type { Station } from '@/data/mock';
 
@@ -25,7 +26,8 @@ if (!IS_EXPO_GO) {
 
 export default function StationMap({ stations }: { stations: Station[] }) {
   const router = useRouter();
-  if (!Maps) return <EmbeddedStationMap stations={stations} />;
+  const { failed, onMapLoaded } = useMapFallback();
+  if (!Maps || failed) return <EmbeddedStationMap stations={stations} />;
 
   const MapView = Maps.default;
   const { Marker, PROVIDER_GOOGLE } = Maps;
@@ -36,6 +38,7 @@ export default function StationMap({ stations }: { stations: Station[] }) {
       provider={PROVIDER_GOOGLE}
       initialRegion={DELHI_REGION}
       customMapStyle={MAP_STYLE}
+      onMapLoaded={onMapLoaded}
       showsMyLocationButton={false}
       toolbarEnabled={false}>
       {stations.map((s: Station) => (

@@ -6,6 +6,7 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import StatusBadge from '@/components/status-badge';
 import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
 import { distanceKm, freeConnectorCount, type Station } from '@/data/mock';
+import { scaledSheet } from '@/constants/responsive';
 
 /** Full-width station row for the Home list. */
 export default function StationCard({ station }: { station: Station }) {
@@ -49,7 +50,7 @@ export default function StationCard({ station }: { station: Station }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = scaledSheet({
   card: {
     backgroundColor: Palette.surface,
     borderRadius: Radius.card,

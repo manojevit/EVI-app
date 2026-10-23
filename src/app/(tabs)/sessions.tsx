@@ -9,6 +9,7 @@ import ChargeRing from '@/components/charge-ring';
 import VoltButton from '@/components/volt-button';
 import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
 import { ACTIVE_SESSION, formatINR } from '@/data/mock';
+import { s as scale, scaledSheet } from '@/constants/responsive';
 
 const BATTERY_PCT = 62;
 const TARGET_PCT = 80;
@@ -52,7 +53,7 @@ export default function SessionsScreen() {
           </View>
 
           <View style={styles.ringWrap}>
-            <ChargeRing size={232} progress={BATTERY_PCT / 100} strokeWidth={16} trackColor={Palette.voltSoft}>
+            <ChargeRing size={scale(208)} progress={BATTERY_PCT / 100} strokeWidth={scale(14)} trackColor={Palette.voltSoft}>
               <Text style={styles.mode}>AC charging</Text>
               <Text style={styles.power}>{s.powerKw}</Text>
               <Text style={styles.unit}>kW</Text>
@@ -124,7 +125,7 @@ function Tile({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = scaledSheet({
   container: { flex: 1, backgroundColor: Palette.canvas },
   scroll: { paddingHorizontal: Spacing.lg, paddingBottom: 130, gap: Spacing.md },
 
@@ -146,7 +147,7 @@ const styles = StyleSheet.create({
 
   ringWrap: { marginTop: Spacing.md },
   mode: { fontFamily: Font.medium, fontSize: 13, color: Palette.mist },
-  power: { fontFamily: Font.display, fontSize: 60, color: Palette.ink, lineHeight: 66 },
+  power: { fontFamily: Font.display, fontSize: 52, color: Palette.ink, lineHeight: 58 },
   unit: { fontFamily: Font.semibold, fontSize: 15, color: Palette.mist, marginTop: -4 },
 
   eta: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: Palette.voltSoft, borderRadius: Radius.pill, paddingHorizontal: Spacing.lg, paddingVertical: 8, marginTop: Spacing.lg },
@@ -158,12 +159,12 @@ const styles = StyleSheet.create({
   connector: { fontFamily: Font.regular, fontSize: 14, color: Palette.mist },
 
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.md },
-  tile: { width: '48.2%', flexGrow: 1, backgroundColor: Palette.surface, borderRadius: Radius.card, padding: Spacing.lg, gap: 6, ...Shadow.soft },
+  tile: { flexBasis: '44%', flexGrow: 1, backgroundColor: Palette.surface, borderRadius: Radius.card, padding: Spacing.lg, gap: 6, ...Shadow.soft },
   tileTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 },
   tileIcon: { width: 30, height: 30, borderRadius: 15, backgroundColor: Palette.voltSoft, alignItems: 'center', justifyContent: 'center' },
   liveTag: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   liveText: { fontFamily: Font.semibold, fontSize: 12, color: Palette.forest },
-  tileValue: { fontFamily: Font.display, fontSize: 22, color: Palette.ink },
+  tileValue: { fontFamily: Font.display, fontSize: 20, color: Palette.ink },
   tileUnit: { fontFamily: Font.medium, fontSize: 14, color: Palette.mist },
   tileLabel: { fontFamily: Font.medium, fontSize: 13, color: Palette.mist },
 });

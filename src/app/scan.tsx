@@ -8,6 +8,7 @@ import AppHeader from '@/components/app-header';
 import VoltButton from '@/components/volt-button';
 import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
 import { findCharger } from '@/data/mock';
+import { scaledSheet } from '@/constants/responsive';
 
 const QUICK_IDS = ['EVIT-03', 'EVIT-05', 'HUBN-01'];
 
@@ -123,7 +124,7 @@ export default function ScanScreen() {
 }
 
 const CORNER = 34;
-const styles = StyleSheet.create({
+const styles = scaledSheet({
   container: { flex: 1, backgroundColor: Palette.canvas },
   scroll: { padding: Spacing.lg, paddingBottom: 48, gap: Spacing.md },
   title: { fontFamily: Font.display, fontSize: 26, color: Palette.ink },

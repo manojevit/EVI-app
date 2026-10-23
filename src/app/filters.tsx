@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import VoltButton from '@/components/volt-button';
 import { Font, Palette, Radius, Spacing } from '@/constants/theme';
 import { CATEGORIES, CONNECTOR_TYPES } from '@/data/mock';
+import { scaledSheet } from '@/constants/responsive';
 
 export default function FiltersSheet() {
   const router = useRouter();
@@ -72,7 +73,7 @@ function Chip({ label, selected, onPress }: { label: string; selected: boolean; 
   );
 }
 
-const styles = StyleSheet.create({
+const styles = scaledSheet({
   overlay: { flex: 1, justifyContent: 'flex-end' },
   backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(8,24,15,0.5)' },
   sheet: { backgroundColor: Palette.canvas, borderTopLeftRadius: 30, borderTopRightRadius: 30, paddingHorizontal: Spacing.xl, paddingTop: Spacing.md, maxHeight: '88%' },

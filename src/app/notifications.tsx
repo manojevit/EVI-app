@@ -4,6 +4,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import AppHeader from '@/components/app-header';
 import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
 import { NOTIFICATIONS } from '@/data/mock';
+import { scaledSheet } from '@/constants/responsive';
 
 export default function NotificationsScreen() {
   return (
@@ -30,7 +31,7 @@ export default function NotificationsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = scaledSheet({
   container: { flex: 1, backgroundColor: Palette.canvas },
   scroll: { padding: Spacing.lg, gap: Spacing.md },
   group: { fontFamily: Font.display, fontSize: 20, color: Palette.ink, marginBottom: Spacing.xs },

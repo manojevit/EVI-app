@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import BrandLogo from '@/components/brand-logo';
 import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
+import { scaledSheet } from '@/constants/responsive';
 
 // Full-screen background from the login design: charger photo top-right fading to white.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -119,7 +120,7 @@ export default function LoginScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = scaledSheet({
   container: { flex: 1, backgroundColor: '#F4F8F5' },
   scroll: { flexGrow: 1, paddingHorizontal: 21 },
 

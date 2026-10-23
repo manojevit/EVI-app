@@ -7,6 +7,7 @@ import AppHeader from '@/components/app-header';
 import { MiniBars } from '@/components/energy-bars';
 import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
 import { CANCELLED_SESSIONS, HISTORY_MONTH, SESSION_HISTORY, formatINR } from '@/data/mock';
+import { scaledSheet } from '@/constants/responsive';
 
 const MONTHS = ['Oct 2026', 'Sep 2026', 'Aug 2026', 'Jul 2026'];
 
@@ -116,7 +117,7 @@ function Seg({ label, active, onPress }: { label: string; active: boolean; onPre
   );
 }
 
-const styles = StyleSheet.create({
+const styles = scaledSheet({
   container: { flex: 1, backgroundColor: Palette.canvas },
   scroll: { padding: Spacing.lg, paddingBottom: 40, gap: Spacing.md },
   title: { fontFamily: Font.display, fontSize: 24, color: Palette.ink },

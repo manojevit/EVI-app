@@ -8,6 +8,7 @@ import StationCard from '@/components/station-card';
 import StationMap from '@/components/station-map';
 import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
 import { ACCOUNT, STATIONS } from '@/data/mock';
+import { s, scaledSheet } from '@/constants/responsive';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -34,7 +35,7 @@ export default function HomeScreen() {
           data={stations}
           keyExtractor={(s) => s.id}
           renderItem={({ item }) => <StationCard station={item} />}
-          contentContainerStyle={{ paddingTop: topPad + 128, paddingHorizontal: Spacing.lg, paddingBottom: 140, gap: Spacing.md }}
+          contentContainerStyle={{ paddingTop: topPad + s(128), paddingHorizontal: s(Spacing.lg), paddingBottom: s(140), gap: Spacing.md }}
           showsVerticalScrollIndicator={false}
         />
       ) : (
@@ -104,7 +105,7 @@ function Chip({ label, active, onPress }: { label: string; active?: boolean; onP
   );
 }
 
-const styles = StyleSheet.create({
+const styles = scaledSheet({
   container: { flex: 1, backgroundColor: Palette.canvas },
   overlay: { position: 'absolute', top: 0, left: 0, right: 0, paddingHorizontal: Spacing.lg, gap: Spacing.md },
 

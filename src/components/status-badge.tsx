@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { Font, Palette, Radius } from '@/constants/theme';
+import { scaledSheet } from '@/constants/responsive';
 
 type Tone = 'available' | 'unavailable' | 'offline' | 'active' | 'charging';
 
@@ -23,7 +24,7 @@ export default function StatusBadge({ label, tone }: { label: string; tone: Tone
   );
 }
 
-const styles = StyleSheet.create({
+const styles = scaledSheet({
   badge: {
     flexDirection: 'row',
     alignItems: 'center',

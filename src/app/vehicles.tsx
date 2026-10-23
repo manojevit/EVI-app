@@ -12,6 +12,7 @@ import { CONNECTORS } from '@/data/connectors';
 import { VEHICLES } from '@/data/mock';
 import { vehiclePhoto } from '@/data/vehicle-images';
 import { VEHICLE_TYPES } from '@/data/vehicles';
+import { scaledSheet } from '@/constants/responsive';
 
 export default function VehiclesScreen() {
   const router = useRouter();
@@ -84,7 +85,7 @@ export default function VehiclesScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = scaledSheet({
   container: { flex: 1, backgroundColor: Palette.canvas },
   scroll: { padding: Spacing.lg, gap: Spacing.lg, paddingBottom: 120 },
   heading: { fontFamily: Font.display, fontSize: 24, color: Palette.ink },

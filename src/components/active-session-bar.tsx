@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MiniBars } from '@/components/energy-bars';
 import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
 import { MINI_SESSION } from '@/data/mock';
+import { scaledSheet } from '@/constants/responsive';
 
 /**
  * Floating "charging now" strip — a light card with a green live accent.
@@ -34,7 +35,7 @@ export default function ActiveSessionBar({ aboveTabBar }: { aboveTabBar?: boolea
   );
 }
 
-const styles = StyleSheet.create({
+const styles = scaledSheet({
   bar: {
     position: 'absolute',
     left: Spacing.lg,

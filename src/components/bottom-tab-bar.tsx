@@ -4,6 +4,7 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
+import { scaledSheet } from '@/constants/responsive';
 
 type TabRoute = { key: string; name: string };
 type BottomTabBarProps = {
@@ -64,7 +65,7 @@ export default function BottomTabBar({ state, emitter, navigateToTab }: BottomTa
   );
 }
 
-const styles = StyleSheet.create({
+const styles = scaledSheet({
   outer: { position: 'absolute', left: 0, right: 0, bottom: 0, alignItems: 'center', backgroundColor: 'transparent' },
   bar: {
     flexDirection: 'row',

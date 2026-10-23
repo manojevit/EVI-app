@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import BrandLogo from '@/components/brand-logo';
 import { Palette, Radius, Spacing } from '@/constants/theme';
+import { scaledSheet } from '@/constants/responsive';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
@@ -46,7 +47,7 @@ export default function AppHeader({ back, rightIcon, onRightPress, rightNode }: 
   );
 }
 
-const styles = StyleSheet.create({
+const styles = scaledSheet({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
