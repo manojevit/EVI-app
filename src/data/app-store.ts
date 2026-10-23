@@ -127,6 +127,19 @@ export function startSession(stationId: string, chargerId: string, connectorId: 
   });
 }
 
+/**
+ * Demo: show an AC or a DC session straight away (for walkthroughs), already
+ * running for a while so the numbers look real.
+ */
+export function showDemoSession(kind: 'AC' | 'DC') {
+  set({
+    session:
+      kind === 'AC'
+        ? { stationId: 'evi-test-1', chargerId: 'ch2', connectorId: 'c1', startedAt: Date.now() - (19 * 60 + 23) * 1000, startSoc: null }
+        : { stationId: 'demo-hub-north', chargerId: 'ch1', connectorId: 'c1', startedAt: Date.now() - 12 * 60 * 1000, startSoc: 34 },
+  });
+}
+
 /** Ends the session, charges the wallet, files it in history and returns the record id. */
 export function stopSession(): string | null {
   const s = state.session;

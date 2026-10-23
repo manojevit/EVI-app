@@ -3,7 +3,7 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Animated as RNAnimated, ScrollView, Text, View } from 'react-native';
+import { Animated as RNAnimated, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import Animated, { Easing, cancelAnimation, useAnimatedStyle, useSharedValue, withRepeat, withTiming, type SharedValue } from 'react-native-reanimated';
 
 import AppHeader from '@/components/app-header';
@@ -11,7 +11,7 @@ import ChargeRing from '@/components/charge-ring';
 import VoltButton from '@/components/volt-button';
 import { s as scale, scaledSheet } from '@/constants/responsive';
 import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
-import { formatDuration, sessionParts, sessionReadout, stopSession, useAppStore, type LiveSession } from '@/data/app-store';
+import { formatDuration, sessionParts, sessionReadout, showDemoSession, stopSession, useAppStore, type LiveSession } from '@/data/app-store';
 import { CONNECTORS } from '@/data/connectors';
 import { formatINR } from '@/data/mock';
 import { vehiclePhoto } from '@/data/vehicle-images';
@@ -36,11 +36,30 @@ function LiveDot() {
 export default function ChargingScreen() {
   const router = useRouter();
   const session = useAppStore((st) => st.session);
+  const kind = session ? sessionParts(session).charger.current : null;
 
   return (
     <View style={styles.container}>
       <AppHeader rightIcon="receipt-outline" onRightPress={() => router.push('/history')} />
-      {session ? <LiveView session={session} /> : <EmptyView />}
+      <DemoSwitch kind={kind} />
+      {session ? <LiveView key={`${session.stationId}-${session.chargerId}`} session={session} /> : <EmptyView />}
+    </View>
+  );
+}
+
+/** Walkthrough switch: jump between an AC and a DC session to see both live views. */
+function DemoSwitch({ kind }: { kind: 'AC' | 'DC' | null }) {
+  return (
+    <View style={styles.demo}>
+      <Text style={styles.demoLabel}>Preview</Text>
+      <View style={styles.demoSeg}>
+        {(['AC', 'DC'] as const).map((k) => (
+          <TouchableOpacity key={k} onPress={() => showDemoSession(k)} activeOpacity={0.85} style={[styles.demoBtn, kind === k && styles.demoBtnOn]}>
+            <Ionicons name="flash" size={12} color={kind === k ? Palette.white : Palette.mist} />
+            <Text style={[styles.demoText, kind === k && styles.demoTextOn]}>{k === 'AC' ? 'AC charger' : 'DC fast charger'}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
     </View>
   );
 }
@@ -250,6 +269,15 @@ function Tile({
 const styles = scaledSheet({
   container: { flex: 1, backgroundColor: Palette.canvas },
   scroll: { paddingHorizontal: Spacing.lg, paddingBottom: 130, gap: Spacing.md },
+
+  // demo switch
+  demo: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingHorizontal: Spacing.lg, marginBottom: Spacing.md },
+  demoLabel: { fontFamily: Font.semibold, fontSize: 12, color: Palette.mist },
+  demoSeg: { flex: 1, flexDirection: 'row', backgroundColor: Palette.canvasDeep, borderRadius: Radius.pill, padding: 3 },
+  demoBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 7, borderRadius: Radius.pill },
+  demoBtnOn: { backgroundColor: Palette.forest },
+  demoText: { fontFamily: Font.semibold, fontSize: 12, color: Palette.mist },
+  demoTextOn: { color: Palette.white },
 
   // empty
   emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: Spacing.xxl, paddingBottom: 110 },
