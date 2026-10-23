@@ -14,7 +14,6 @@ import Animated, {
   useReducedMotion,
   useSharedValue,
   withDelay,
-  withRepeat,
   withSequence,
   withSpring,
   withTiming,
@@ -105,7 +104,7 @@ const INTAKE = Array.from({ length: 22 }, (_, i) => ({
   length: 8 + rand(i, 10) * 14,
 }));
 // Gauge ticks around the ring that light up as the charge passes them.
-const TICKS = 60;
+const TICKS = 48;
 const TICK_R = R + 20;
 const LIME = '#B6F09C';
 
@@ -170,20 +169,18 @@ function IntakeStreak({
   return <Animated.View style={[styles.abs, styles.intake, { width: p.length }, style]} />;
 }
 
-function Tick({ i, progress, track }: { i: number; progress: SharedValue<number>; track: SharedValue<number> }) {
+/** A gauge tick: a dim static bar with a green bar on top that fades in (opacity only). */
+function Tick({ i, progress }: { i: number; progress: SharedValue<number> }) {
   const at = i / TICKS;
-  const style = useAnimatedStyle(() => {
-    const lit = interpolate(progress.value, [at - 0.001, at + 0.04], [0, 1], Extrapolation.CLAMP);
-    return {
-      opacity: track.value * (0.18 + lit * 0.82),
-      backgroundColor: lit > 0.5 ? Palette.volt : Palette.brandTint2,
-      transform: [{ scaleY: 1 + lit * (i % 5 === 0 ? 0.9 : 0.4) }],
-    };
-  });
+  const major = i % 4 === 0;
+  const lit = useAnimatedStyle(() => ({
+    opacity: interpolate(progress.value, [at - 0.001, at + 0.035], [0, 1], Extrapolation.CLAMP),
+  }));
   return (
     <View style={[StyleSheet.absoluteFill, styles.center, { transform: [{ rotate: `${at * 360}deg` }] }]} pointerEvents="none">
       <View style={{ transform: [{ translateY: -TICK_R }] }}>
-        <Animated.View style={[styles.tickBar, i % 5 === 0 && styles.tickMajor, style]} />
+        <View style={[styles.tickBar, major && styles.tickMajor, styles.tickDim]} />
+        <Animated.View style={[styles.tickBar, styles.tickLit, major && styles.tickMajorLit, lit]} />
       </View>
     </View>
   );
@@ -207,24 +204,19 @@ const clamp01 = (x: number) => {
 };
 
 /**
- * A rolling odometer column. v runs 0 → 100 continuously: units spin freely,
- * tens and hundreds carry like a real odometer and slide in when first needed.
+ * One digit of the counter: a strip of digits moved by transform only (no layout,
+ * no React renders), snapping to whole numbers so it reads crisp at any speed.
  */
 function DigitColumn({ progress, place }: { progress: SharedValue<number>; place: 'hundreds' | 'tens' | 'units' }) {
-  const digits = place === 'hundreds' ? [' ', '1'] : ROLL;
+  const digits = place === 'hundreds' ? ['1'] : ROLL;
   const roll = useAnimatedStyle(() => {
-    const v = progress.value * 100;
-    const index =
-      place === 'hundreds' ? clamp01(v - 99) : place === 'tens' ? Math.floor(v / 10) + clamp01((v % 10) - 9) : v % 10;
-    return { transform: [{ translateY: -index * DIGIT_H }] };
-  });
-  const box = useAnimatedStyle(() => {
-    const v = progress.value * 100;
-    const shown = place === 'hundreds' ? clamp01(v - 99) : place === 'tens' ? clamp01(v - 9) : 1;
-    return { width: shown * DIGIT_W };
+    const v = Math.round(progress.value * 100);
+    const index = place === 'hundreds' ? 0 : place === 'tens' ? Math.floor(v / 10) : v % 10;
+    const shown = place === 'hundreds' ? v >= 100 : place === 'tens' ? v >= 10 : true;
+    return { opacity: shown ? 1 : 0, transform: [{ translateY: -index * DIGIT_H }] };
   });
   return (
-    <Animated.View style={[styles.digitBox, box]}>
+    <View style={styles.digitBox}>
       <Animated.View style={roll}>
         {digits.map((d, i) => (
           <Text key={i} style={styles.digit}>
@@ -232,20 +224,26 @@ function DigitColumn({ progress, place }: { progress: SharedValue<number>; place
           </Text>
         ))}
       </Animated.View>
-    </Animated.View>
+    </View>
   );
 }
 
 const ROLL = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0'];
 
 function Odometer({ progress }: { progress: SharedValue<number> }) {
+  // Hidden leading columns sit on the left; slide the row so the number stays centred.
+  const row = useAnimatedStyle(() => {
+    const v = Math.round(progress.value * 100);
+    const hidden = (v < 100 ? 1 : 0) + (v < 10 ? 1 : 0);
+    return { transform: [{ translateX: (-hidden * DIGIT_W) / 2 }] };
+  });
   return (
-    <View style={styles.odometer}>
+    <Animated.View style={[styles.odometer, row]}>
       <DigitColumn progress={progress} place="hundreds" />
       <DigitColumn progress={progress} place="tens" />
       <DigitColumn progress={progress} place="units" />
       <Text style={styles.pct}>%</Text>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -314,7 +312,8 @@ export default function ChargeUpIntro({ onDone }: { onDone: () => void }) {
     lift.value = withDelay(T.lift, withTiming(1, { duration: 220, easing: inOut }));
     track.value = withDelay(T.lift, withTiming(1, { duration: 260, easing: easeOut }));
     counter.value = withDelay(T.charge, withSpring(1, SPRING_SOFT));
-    clock.value = withRepeat(withTiming(1, { duration: 760, easing: Easing.linear }), -1, false);
+    // finite clock (one stream cycle ≈ 760ms) so the streaks stop computing once charging ends
+    clock.value = withDelay(T.charge, withTiming((T.wind - T.charge) / 760, { duration: T.wind - T.charge, easing: Easing.linear }));
     intake.value = withSequence(
       withDelay(T.charge, withTiming(1, { duration: 300 })),
       withDelay(T.wind - T.charge - 300 - 120, withTiming(0, { duration: 200 })),
@@ -332,38 +331,24 @@ export default function ChargeUpIntro({ onDone }: { onDone: () => void }) {
     bolt.value = withDelay(T.strike, withSpring(1, SPRING_POP));
     split.value = withDelay(
       T.strike,
-      withSequence(
-        withTiming(1, { duration: 40 }),
-        withTiming(0.35, { duration: 60 }),
-        withTiming(0.8, { duration: 50 }),
-        withTiming(0, { duration: 180, easing: easeOut }),
-      ),
+      withSequence(withTiming(1, { duration: 70, easing: easeOut }), withTiming(0, { duration: 380, easing: easeOut })),
     );
     burst.value = withDelay(T.strike, withTiming(1, { duration: 760, easing: easeOutExpo }));
     shockA.value = withDelay(T.strike, withTiming(1, { duration: 700, easing: easeOut }));
     shockB.value = withDelay(T.strike + 90, withTiming(1, { duration: 760, easing: easeOut }));
-    shake.value = withDelay(
-      T.strike,
-      withSequence(
-        withTiming(7, { duration: 40 }),
-        withTiming(-6, { duration: 45 }),
-        withTiming(4, { duration: 45 }),
-        withTiming(-2, { duration: 45 }),
-        withTiming(0, { duration: 50 }),
-      ),
-    );
+    // 0 → 1 drives a damped sine (see stageStyle) — a smooth decaying shake, no hard reversals
+    shake.value = withDelay(T.strike, withTiming(1, { duration: 420, easing: Easing.linear }));
 
     // 4. green flood, bolt hands over to the white logo
     floodLead.value = withDelay(T.flood - 40, withTiming(1, { duration: 520, easing: inOut }));
     flood.value = withDelay(T.flood + 50, withTiming(1, { duration: 520, easing: inOut }));
     flicker.value = withDelay(
       T.logoIn,
+      // eased "power-on" pulse: up, a soft dip, settle — reads like neon without hard blinks
       withSequence(
-        withTiming(1, { duration: 40 }),
-        withTiming(0.2, { duration: 50 }),
-        withTiming(0.9, { duration: 40 }),
-        withTiming(0.4, { duration: 70 }),
-        withTiming(1, { duration: 90 }),
+        withTiming(1, { duration: 140, easing: easeOut }),
+        withTiming(0.55, { duration: 110, easing: inOut }),
+        withTiming(1, { duration: 200, easing: easeOut }),
       ),
     );
     boltWhite.value = withDelay(T.flood + 120, withTiming(1, { duration: 200 }));
@@ -401,7 +386,13 @@ export default function ChargeUpIntro({ onDone }: { onDone: () => void }) {
   );
 
   // ---- styles ----
-  const stageStyle = useAnimatedStyle(() => ({ transform: [{ translateX: shake.value }, { translateY: shake.value * -0.4 }] }));
+  const stageStyle = useAnimatedStyle(() => {
+    const t = shake.value;
+    const amp = t > 0 && t < 1 ? 7 * (1 - t) * (1 - t) : 0;
+    return {
+      transform: [{ translateX: Math.sin(t * Math.PI * 6) * amp }, { translateY: Math.cos(t * Math.PI * 5) * amp * 0.4 }],
+    };
+  });
 
   const logoAStyle = useAnimatedStyle(() => ({
     opacity: interpolate(logoA.value, [0, 0.75, 1], [1, 0.6, 0], Extrapolation.CLAMP),
@@ -418,7 +409,8 @@ export default function ChargeUpIntro({ onDone }: { onDone: () => void }) {
     transform: [{ scale: 0.86 + track.value * 0.14 }],
   }));
   const ringProps = useAnimatedProps(() => ({ strokeDashoffset: CIRC * (1 - progress.value) }));
-  const ringGlowProps = useAnimatedProps(() => ({ strokeDashoffset: CIRC * (1 - progress.value) }));
+  const ticksStyle = useAnimatedStyle(() => ({ opacity: track.value }));
+  const ringGlowProps =useAnimatedProps(() => ({ strokeDashoffset: CIRC * (1 - progress.value) }));
   const labelCharging = useAnimatedStyle(() => ({ opacity: interpolate(progress.value, [0.97, 1], [1, 0], Extrapolation.CLAMP) }));
   const labelFull = useAnimatedStyle(() => {
     const t = interpolate(progress.value, [0.97, 1], [0, 1], Extrapolation.CLAMP);
@@ -479,7 +471,11 @@ export default function ChargeUpIntro({ onDone }: { onDone: () => void }) {
     <Pressable style={styles.fill} onPress={onDone} accessibilityRole="button" accessibilityLabel="Skip intro">
       <Animated.View style={[styles.fill, styles.center, stageStyle]}>
         {/* energy field */}
-        <Animated.View style={[styles.abs, { width: GLOW, height: GLOW }, glowStyle]} pointerEvents="none">
+        <Animated.View
+          style={[styles.abs, { width: GLOW, height: GLOW }, glowStyle]}
+          pointerEvents="none"
+          renderToHardwareTextureAndroid
+          shouldRasterizeIOS>
           <Svg width={GLOW} height={GLOW}>
             <Defs>
               <RadialGradient id="introGlow" cx="50%" cy="50%" r="50%">
@@ -504,9 +500,11 @@ export default function ChargeUpIntro({ onDone }: { onDone: () => void }) {
 
         {/* charging group */}
         <Animated.View style={[styles.abs, { width: GROUP, height: GROUP }, chargeGroup]}>
-          {Array.from({ length: TICKS }, (_, i) => (
-            <Tick key={i} i={i} progress={progress} track={track} />
-          ))}
+          <Animated.View style={[StyleSheet.absoluteFill, ticksStyle]} pointerEvents="none">
+            {Array.from({ length: TICKS }, (_, i) => (
+              <Tick key={i} i={i} progress={progress} />
+            ))}
+          </Animated.View>
           <Animated.View style={[StyleSheet.absoluteFill, styles.center, trackStyle]}>
             <Svg width={RING} height={RING}>
               <Defs>
@@ -576,9 +574,15 @@ export default function ChargeUpIntro({ onDone }: { onDone: () => void }) {
         />
         <Animated.View
           pointerEvents="none"
+          renderToHardwareTextureAndroid
+          shouldRasterizeIOS
           style={[styles.abs, { width: floodD, height: floodD, borderRadius: floodD / 2, overflow: 'hidden' }, floodStyle]}>
           <LinearGradient colors={['#2CAF60', '#17713A']} start={{ x: 0.2, y: 0 }} end={{ x: 0.8, y: 1 }} style={StyleSheet.absoluteFill} />
-          <Animated.View style={[styles.sheen, { height: floodD }, sheenStyle]}>
+        </Animated.View>
+
+        {/* light sheen across the green (kept outside the flood so the flood stays a cached, static layer) */}
+        <View style={[StyleSheet.absoluteFill, styles.center, styles.clip]} pointerEvents="none">
+          <Animated.View style={[styles.sheen, { height: height * 1.6 }, sheenStyle]}>
             <LinearGradient
               colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.16)', 'rgba(255,255,255,0)']}
               start={{ x: 0, y: 0.5 }}
@@ -586,7 +590,7 @@ export default function ChargeUpIntro({ onDone }: { onDone: () => void }) {
               style={StyleSheet.absoluteFill}
             />
           </Animated.View>
-        </Animated.View>
+        </View>
 
         {/* bolt: strikes green, turns white as the flood passes */}
         <Animated.View style={[styles.abs, { width: BOLT_W, height: BOLT_H }, boltStyle]} pointerEvents="none">
@@ -639,7 +643,7 @@ const styles = StyleSheet.create({
   cometCore: { width: 16, height: 16, borderRadius: 8, backgroundColor: Palette.volt, borderWidth: 3, borderColor: Palette.white },
 
   odometer: { flexDirection: 'row', alignItems: 'flex-end' },
-  digitBox: { height: DIGIT_H, overflow: 'hidden' },
+  digitBox: { width: DIGIT_W, height: DIGIT_H, overflow: 'hidden' },
   digit: {
     height: DIGIT_H,
     lineHeight: DIGIT_H,
@@ -656,9 +660,13 @@ const styles = StyleSheet.create({
   intake: { height: 2.5, borderRadius: 2, backgroundColor: Palette.volt },
   tickBar: { width: 2, height: 7, borderRadius: 1 },
   tickMajor: { width: 3, height: 10 },
+  tickMajorLit: { width: 3, height: 16, top: -3 },
+  tickDim: { backgroundColor: Palette.brandTint2, opacity: 0.6 },
+  tickLit: { position: 'absolute', top: -1.5, height: 10, backgroundColor: Palette.volt },
   counterLabel: { fontFamily: Font.medium, fontSize: 13, lineHeight: 18, color: Palette.mist, letterSpacing: 0.3, textAlign: 'center' },
 
-  sheen: { position: 'absolute', top: 0, width: 140, alignSelf: 'center' },
+  sheen: { position: 'absolute', width: 140 },
+  clip: { overflow: 'hidden' },
 
   final: { alignItems: 'center' },
   tagline: { flexDirection: 'row', gap: 5, marginTop: 20 },
