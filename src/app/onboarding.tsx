@@ -1,42 +1,49 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import Animated, {
+  cancelAnimation,
+  Easing,
   Extrapolation,
   interpolate,
   runOnJS,
+  scrollTo,
   useAnimatedProps,
   useAnimatedReaction,
   useAnimatedRef,
   useAnimatedScrollHandler,
   useAnimatedStyle,
+  useReducedMotion,
   useSharedValue,
-  scrollTo,
+  withDelay,
+  withRepeat,
+  withSpring,
+  withTiming,
   type SharedValue,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Circle, Path } from 'react-native-svg';
+import Svg, { Circle } from 'react-native-svg';
 
 import BrandLogo from '@/components/brand-logo';
+import OnboardingMap from '@/components/onboarding-map';
+import { projectFromCenter } from '@/constants/map-style';
 import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
-import { ACCOUNT, PLANS, STATIONS, distanceKm, formatINR, freeConnectorCount, maxPowerKw, stationConnectors } from '@/data/mock';
-import { vehiclePhoto } from '@/data/vehicle-images';
+import { STATIONS } from '@/data/mock';
 
 const SLIDES = [
   {
-    title: 'Find a charger\nin seconds',
-    body: 'See live availability, charging speed and price at EVIT stations near you.',
+    title: 'Find a charger\nnear you',
+    body: 'See which EVIT stations are free right now, how fast they charge and how far away they are.',
   },
   {
     title: 'Scan, plug in,\ncharge',
-    body: 'Scan the QR on any EVIT charger to start, then follow your charge live.',
+    body: 'Scan the QR code on any EVIT charger, plug in, and follow your charge live.',
   },
   {
-    title: 'Pay as\nyou charge',
-    body: 'Top up your wallet once, pay per kWh, and get a receipt for every session.',
+    title: 'Pay only for\nwhat you use',
+    body: 'Pay per kWh for the energy you use, and get a receipt after every charge.',
   },
 ];
 const LAST = SLIDES.length - 1;
@@ -45,6 +52,20 @@ const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 const BTN = 64;
 const BTN_R = 25; // progress ring sits inside the button
 const BTN_C = 2 * Math.PI * BTN_R;
+
+/** Starts an endless 0→1 loop (optionally ping-pong) and stops it on unmount. */
+function useLoop(duration: number, { reverse = false, delay = 0 } = {}) {
+  const reduceMotion = useReducedMotion();
+  const t = useSharedValue(0);
+  useEffect(() => {
+    if (reduceMotion) return;
+    t.value = withDelay(delay, withRepeat(withTiming(1, { duration, easing: reverse ? Easing.inOut(Easing.sin) : Easing.linear }), -1, reverse));
+    return () => cancelAnimation(t);
+    // shared value is stable
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reduceMotion]);
+  return t;
+}
 
 /** A layer that drifts faster/slower than the page while swiping (depth). */
 function Layer({
@@ -72,141 +93,150 @@ function Layer({
   return <Animated.View style={[style, a]}>{children}</Animated.View>;
 }
 
-// ---------- slide visuals ----------
+// ---------- slide 1: real map + live pins ----------
+
+function MapPin({ x, y, order, available }: { x: number; y: number; order: number; available: boolean }) {
+  const drop = useSharedValue(0);
+  const pulse = useLoop(1800, { delay: order * 260 });
+  useEffect(() => {
+    drop.value = withDelay(250 + order * 110, withSpring(1, { damping: 11, stiffness: 180 }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const pinStyle = useAnimatedStyle(() => ({
+    opacity: Math.min(drop.value * 2, 1),
+    transform: [{ translateY: (1 - drop.value) * -26 }, { scale: 0.6 + drop.value * 0.4 }],
+  }));
+  const ringStyle = useAnimatedStyle(() => ({
+    opacity: available ? (1 - pulse.value) * 0.45 * Math.min(drop.value, 1) : 0,
+    transform: [{ scale: 0.5 + pulse.value * 1.5 }],
+  }));
+  return (
+    // the pin's tip sits exactly on (x, y)
+    <View style={[styles.pinAnchor, { transform: [{ translateX: x }, { translateY: y - PIN_H / 2 }] }]} pointerEvents="none">
+      <Animated.View style={[styles.pinPulse, ringStyle]} />
+      <Animated.View style={[styles.pinCol, pinStyle]}>
+        <View style={[styles.pin, !available && styles.pinOff]}>
+          <MaterialCommunityIcons name="ev-station" size={16} color={available ? Palette.forest : Palette.mistLight} />
+        </View>
+        <View style={[styles.pinStem, !available && styles.pinStemOff]} />
+      </Animated.View>
+    </View>
+  );
+}
 
 function MapVisual({ scrollX, width }: { scrollX: SharedValue<number>; width: number }) {
-  const hub = STATIONS.find((s) => s.id === 'demo-hub-north') ?? STATIONS[0];
-  const pins = [
-    { left: '18%', top: '22%' },
-    { left: '62%', top: '14%' },
-    { left: '40%', top: '42%' },
-    { left: '76%', top: '40%' },
-    { left: '24%', top: '58%' },
-  ] as const;
   return (
     <>
-      <Layer scrollX={scrollX} index={0} width={width} depth={0.25} style={StyleSheet.absoluteFill}>
-        <Svg width="100%" height="100%" viewBox="0 0 340 300" preserveAspectRatio="xMidYMid slice">
-          <Path d="M-10 70 C 80 40, 160 120, 350 80" stroke="#FFFFFF" strokeWidth={14} fill="none" opacity={0.9} />
-          <Path d="M40 -10 C 90 90, 60 190, 120 320" stroke="#FFFFFF" strokeWidth={10} fill="none" opacity={0.8} />
-          <Path d="M-10 210 C 110 170, 220 250, 350 190" stroke="#FFFFFF" strokeWidth={12} fill="none" opacity={0.85} />
-          <Path d="M250 -10 C 230 100, 290 180, 260 320" stroke="#FFFFFF" strokeWidth={8} fill="none" opacity={0.7} />
-        </Svg>
+      <Layer scrollX={scrollX} index={0} width={width} depth={0.2} style={StyleSheet.absoluteFill}>
+        <OnboardingMap />
       </Layer>
-      {pins.map((p, i) => (
-        <Layer key={i} scrollX={scrollX} index={0} width={width} depth={0.45 + i * 0.06} style={[styles.pinPos, { left: p.left, top: p.top }]}>
-          <View style={[styles.pin, i === 2 && styles.pinActive]}>
-            <MaterialCommunityIcons name="ev-station" size={i === 2 ? 20 : 16} color={i === 2 ? Palette.white : Palette.forest} />
-          </View>
-          <View style={[styles.pinStem, i === 2 && { backgroundColor: Palette.volt }]} />
-        </Layer>
-      ))}
-      <Layer scrollX={scrollX} index={0} width={width} depth={0.9} style={styles.bottomCard}>
-        <View style={[styles.card, styles.hubCard]}>
-          <View style={styles.cardIcon}>
-            <MaterialCommunityIcons name="ev-station" size={22} color={Palette.forest} />
-          </View>
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={styles.cardTitle} numberOfLines={1}>{hub.name}</Text>
-            <Text style={styles.cardMeta} numberOfLines={1}>
-              {maxPowerKw(hub)} kW · <Text style={styles.free}>{freeConnectorCount(hub)} of {stationConnectors(hub).length} free</Text> ·{' '}
-              {distanceKm(hub).toFixed(1)} km
-            </Text>
-          </View>
-          <View style={styles.go}>
-            <Ionicons name="navigate" size={16} color={Palette.white} />
-          </View>
-        </View>
-      </Layer>
-      <Layer scrollX={scrollX} index={0} width={width} depth={1.1} style={styles.topChip}>
-        <View style={styles.chip}>
-          <View style={styles.liveDot} />
-          <Text style={styles.chipText}>{STATIONS.length} stations near you</Text>
-        </View>
+      <Layer scrollX={scrollX} index={0} width={width} depth={0.32} style={[StyleSheet.absoluteFill, styles.center]}>
+        {STATIONS.map((s, i) => {
+          const { x, y } = projectFromCenter(s.latitude, s.longitude);
+          return <MapPin key={s.id} x={x} y={y} order={i} available={s.status === 'Available'} />;
+        })}
       </Layer>
     </>
   );
 }
 
-function ChargeVisual({ scrollX, width }: { scrollX: SharedValue<number>; width: number }) {
+// ---------- slide 2: scan the charger QR ----------
+
+function ScanVisual({ scrollX, width }: { scrollX: SharedValue<number>; width: number }) {
+  const scan = useLoop(1300, { reverse: true });
+  const bob = useLoop(2200, { reverse: true });
+  const bob2 = useLoop(2600, { reverse: true, delay: 500 });
+  const scanLine = useAnimatedStyle(() => ({ transform: [{ translateY: -46 + scan.value * 92 }] }));
+  const bobA = useAnimatedStyle(() => ({ transform: [{ translateY: -6 + bob.value * 12 }] }));
+  const bobB = useAnimatedStyle(() => ({ transform: [{ translateY: 5 - bob2.value * 10 }] }));
   return (
     <>
-      <Layer scrollX={scrollX} index={1} width={width} depth={1.0} style={styles.topChip}>
-        <View style={styles.chip}>
-          <MaterialCommunityIcons name="qrcode-scan" size={14} color={Palette.forest} />
-          <Text style={styles.chipText}>Scan the QR on the charger</Text>
-        </View>
+      <Layer scrollX={scrollX} index={1} width={width} depth={0.1} style={[StyleSheet.absoluteFill, styles.center]}>
+        {[340, 260, 180].map((d) => (
+          <View key={d} style={[styles.halo, { width: d, height: d, borderRadius: d / 2 }]} />
+        ))}
       </Layer>
-      <Layer scrollX={scrollX} index={1} width={width} depth={0.35} style={styles.carWrap}>
-        <Image source={vehiclePhoto('BYD Seal')} style={styles.car} contentFit="contain" />
-      </Layer>
-      <Layer scrollX={scrollX} index={1} width={width} depth={0.85} style={styles.bottomCard}>
-        <View style={[styles.card, styles.chargeCard]}>
-          <View style={styles.chargeTop}>
-            <View style={styles.liveRow}>
-              <View style={styles.liveDot} />
-              <Text style={styles.liveText}>Charging · 3.4 kW</Text>
+
+      <Layer scrollX={scrollX} index={1} width={width} depth={0.35} style={[StyleSheet.absoluteFill, styles.center]}>
+        <View style={styles.phone}>
+          <View style={styles.notch} />
+          <View style={styles.phoneScreen}>
+            <View style={styles.finder}>
+              <View style={[styles.corner, styles.cTL]} />
+              <View style={[styles.corner, styles.cTR]} />
+              <View style={[styles.corner, styles.cBL]} />
+              <View style={[styles.corner, styles.cBR]} />
+              <MaterialCommunityIcons name="qrcode" size={82} color={Palette.ink} />
+              <Animated.View style={[styles.scanLine, scanLine]} />
             </View>
-            <Text style={styles.pct}>62%</Text>
+            <Text style={styles.phoneHint}>Scan the charger QR</Text>
           </View>
-          <View style={styles.track}>
-            <LinearGradient colors={Palette.gradEnergy} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[styles.fill, { width: '62%' }]} />
-          </View>
-          <Text style={styles.eta}>80% in about 45 min</Text>
         </View>
+      </Layer>
+
+      <Layer scrollX={scrollX} index={1} width={width} depth={0.7} style={styles.plugPos}>
+        <Animated.View style={bobA}>
+          <LinearGradient colors={Palette.gradVolt} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.plugBadge}>
+            <MaterialCommunityIcons name="ev-plug-type2" size={30} color={Palette.white} />
+          </LinearGradient>
+        </Animated.View>
+      </Layer>
+      <Layer scrollX={scrollX} index={1} width={width} depth={0.95} style={styles.boltPos}>
+        <Animated.View style={[styles.boltBadge, bobB]}>
+          <Ionicons name="flash" size={24} color={Palette.forest} />
+        </Animated.View>
       </Layer>
     </>
   );
 }
 
-function WalletVisual({ scrollX, width }: { scrollX: SharedValue<number>; width: number }) {
-  const receipts = [
-    { when: '22 Oct, 15:07', kwh: '2.37 kWh', cost: 23.7 },
-    { when: '22 Oct, 12:27', kwh: '1.77 kWh', cost: 17.7 },
-  ];
-  const plus = PLANS.find((p) => p.id === 'plus') ?? PLANS[0];
+// ---------- slide 3: pay per kWh ----------
+
+const ORBIT = 236;
+const ORBIT_ICONS = ['contactless-payment', 'credit-card-outline', 'receipt-text-outline'] as const;
+
+function OrbitBadge({ i, spin }: { i: number; spin: SharedValue<number> }) {
+  const base = (i / ORBIT_ICONS.length) * 360;
+  // counter-rotate so the icon stays upright while the ring turns
+  const upright = useAnimatedStyle(() => ({ transform: [{ rotate: `${-(base + spin.value * 360)}deg` }] }));
+  return (
+    <View style={[StyleSheet.absoluteFill, styles.center, { transform: [{ rotate: `${base}deg` }] }]} pointerEvents="none">
+      <View style={{ transform: [{ translateY: -ORBIT / 2 }] }}>
+        <Animated.View style={[styles.orbitBadge, upright]}>
+          <MaterialCommunityIcons name={ORBIT_ICONS[i]} size={22} color={Palette.forest} />
+        </Animated.View>
+      </View>
+    </View>
+  );
+}
+
+function PayVisual({ scrollX, width }: { scrollX: SharedValue<number>; width: number }) {
+  const spin = useLoop(14000);
+  const wobble = useLoop(2400, { reverse: true });
+  const orbitStyle = useAnimatedStyle(() => ({ transform: [{ rotate: `${spin.value * 360}deg` }] }));
+  const coinStyle = useAnimatedStyle(() => ({
+    transform: [{ perspective: 600 }, { rotateY: `${-16 + wobble.value * 32}deg` }, { translateY: -4 + wobble.value * 8 }],
+  }));
   return (
     <>
-      <Layer scrollX={scrollX} index={2} width={width} depth={0.3} style={styles.walletPos}>
-        <View style={[styles.card, styles.walletCard]}>
-          <View style={styles.walletTop}>
-            <View style={styles.walletIcon}>
-              <Ionicons name="wallet" size={16} color={Palette.forest} />
-            </View>
-            <Text style={styles.walletLabel}>Wallet balance</Text>
-          </View>
-          <Text style={styles.walletAmount}>{formatINR(ACCOUNT.walletBalance)}</Text>
-          <View style={styles.addMoney}>
-            <Ionicons name="add" size={16} color={Palette.white} />
-            <Text style={styles.addMoneyText}>Add money</Text>
-          </View>
-        </View>
+      <Layer scrollX={scrollX} index={2} width={width} depth={0.25} style={[StyleSheet.absoluteFill, styles.center]}>
+        <Animated.View style={[styles.orbit, orbitStyle]}>
+          {ORBIT_ICONS.map((_, i) => (
+            <OrbitBadge key={i} i={i} spin={spin} />
+          ))}
+        </Animated.View>
       </Layer>
-      {receipts.map((r, i) => (
-        <Layer key={r.when} scrollX={scrollX} index={2} width={width} depth={0.7 + i * 0.25} style={[styles.receiptPos, { top: 168 + i * 66 }]}>
-          <View style={[styles.card, styles.receipt]}>
-            <View style={styles.receiptIcon}>
-              <Ionicons name="flash" size={16} color={Palette.forest} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.receiptTitle}>EVI-Test-1</Text>
-              <Text style={styles.receiptMeta}>{r.when} · {r.kwh}</Text>
-            </View>
-            <Text style={styles.receiptCost}>{formatINR(r.cost)}</Text>
-          </View>
-        </Layer>
-      ))}
-      <Layer scrollX={scrollX} index={2} width={width} depth={1.05} style={styles.bottomCard}>
-        <LinearGradient colors={Palette.gradEnergy} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.plus}>
-          <View style={styles.plusIcon}>
-            <MaterialCommunityIcons name="star-four-points" size={18} color={Palette.forest} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.plusTitle}>{plus.name}</Text>
-            <Text style={styles.plusMeta}>{plus.kwh} kWh a month for ₹{plus.priceINR}</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color={Palette.white} />
-        </LinearGradient>
+      <Layer scrollX={scrollX} index={2} width={width} depth={0.55} style={[StyleSheet.absoluteFill, styles.center]}>
+        <Animated.View style={coinStyle}>
+          <LinearGradient colors={Palette.gradForest} start={{ x: 0.2, y: 0 }} end={{ x: 0.8, y: 1 }} style={styles.coin}>
+            <View style={styles.coinRing} />
+            <Text style={styles.coinSymbol}>₹</Text>
+          </LinearGradient>
+        </Animated.View>
+        <View style={styles.kwhPill}>
+          <Ionicons name="flash" size={13} color={Palette.forest} />
+          <Text style={styles.kwhText}>per kWh</Text>
+        </View>
       </Layer>
     </>
   );
@@ -302,7 +332,6 @@ export default function OnboardingScreen() {
     if (index >= LAST) return finish();
     scrollTo(scrollRef, (index + 1) * width, 0, true);
   };
-  const goNext = () => next();
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + Spacing.sm }]}>
@@ -327,8 +356,8 @@ export default function OnboardingScreen() {
           <View key={i} style={{ width, paddingHorizontal: Spacing.xxl }}>
             <LinearGradient colors={Palette.gradHero} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.visual, { height: visualH }]}>
               {i === 0 ? <MapVisual scrollX={scrollX} width={width} /> : null}
-              {i === 1 ? <ChargeVisual scrollX={scrollX} width={width} /> : null}
-              {i === 2 ? <WalletVisual scrollX={scrollX} width={width} /> : null}
+              {i === 1 ? <ScanVisual scrollX={scrollX} width={width} /> : null}
+              {i === 2 ? <PayVisual scrollX={scrollX} width={width} /> : null}
             </LinearGradient>
             <Layer scrollX={scrollX} index={i} width={width} depth={0.15}>
               <Text style={styles.title}>{s.title}</Text>
@@ -346,72 +375,100 @@ export default function OnboardingScreen() {
             <Dot key={i} i={i} scrollX={scrollX} width={width} />
           ))}
         </View>
-        <NextButton scrollX={scrollX} width={width} onPress={goNext} />
+        <NextButton scrollX={scrollX} width={width} onPress={next} />
       </View>
     </View>
   );
 }
 
+const PIN = 30;
+const PIN_H = PIN + 6;
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Palette.canvas },
+  center: { alignItems: 'center', justifyContent: 'center' },
   topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.xxl, marginBottom: Spacing.lg },
   skip: { fontFamily: Font.semibold, fontSize: 15, color: Palette.mist },
 
   visual: { borderRadius: Radius.hero, borderWidth: 1, borderColor: Palette.brandTint2, overflow: 'hidden' },
   title: { fontFamily: Font.display, fontSize: 32, lineHeight: 38, color: Palette.ink, marginTop: Spacing.xxl, letterSpacing: -0.4 },
-  body: { fontFamily: Font.regular, fontSize: 16, lineHeight: 23, color: Palette.mist, marginTop: Spacing.md, maxWidth: 320 },
+  body: { fontFamily: Font.regular, fontSize: 16, lineHeight: 23, color: Palette.mist, marginTop: Spacing.md, maxWidth: 330 },
 
-  // shared visual bits
-  card: { backgroundColor: Palette.surface, borderRadius: 18, padding: Spacing.md, ...Shadow.lift },
-  topChip: { position: 'absolute', top: 16, left: 16 },
-  chip: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: Palette.surface, borderRadius: Radius.pill, paddingHorizontal: Spacing.md, paddingVertical: 7, ...Shadow.soft },
-  chipText: { fontFamily: Font.semibold, fontSize: 12, color: Palette.forest },
-  liveDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: Palette.volt },
-  bottomCard: { position: 'absolute', left: 16, right: 16, bottom: 16 },
+  // map pins
+  pinAnchor: { position: 'absolute', width: 60, height: PIN_H, alignItems: 'center', justifyContent: 'center' },
+  pinCol: { alignItems: 'center' },
+  pin: { width: PIN, height: PIN, borderRadius: PIN / 2, backgroundColor: Palette.surface, borderWidth: 2.5, borderColor: Palette.volt, alignItems: 'center', justifyContent: 'center', ...Shadow.soft },
+  pinOff: { borderColor: Palette.mistLight },
+  pinStem: { width: 3, height: 8, marginTop: -2, borderRadius: 2, backgroundColor: Palette.volt },
+  pinStemOff: { backgroundColor: Palette.mistLight },
+  pinPulse: { position: 'absolute', top: -6, width: 44, height: 44, borderRadius: 22, backgroundColor: Palette.volt },
 
-  // map
-  pinPos: { position: 'absolute', alignItems: 'center' },
-  pin: { width: 34, height: 34, borderRadius: 17, backgroundColor: Palette.surface, borderWidth: 2.5, borderColor: Palette.volt, alignItems: 'center', justifyContent: 'center', ...Shadow.soft },
-  pinActive: { width: 44, height: 44, borderRadius: 22, backgroundColor: Palette.volt, borderColor: Palette.white },
-  pinStem: { width: 3, height: 8, marginTop: -2, borderRadius: 2, backgroundColor: Palette.brandTint2 },
-  hubCard: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
-  cardIcon: { width: 42, height: 42, borderRadius: 12, backgroundColor: Palette.voltSoft, alignItems: 'center', justifyContent: 'center' },
-  cardTitle: { fontFamily: Font.displaySemi, fontSize: 14, color: Palette.ink },
-  cardMeta: { fontFamily: Font.medium, fontSize: 12, color: Palette.mist, marginTop: 2 },
-  free: { color: Palette.forest, fontFamily: Font.semibold },
-  go: { width: 36, height: 36, borderRadius: 18, backgroundColor: Palette.forest, alignItems: 'center', justifyContent: 'center' },
+  // scan
+  halo: { position: 'absolute', borderWidth: 1.5, borderColor: Palette.brandTint2, opacity: 0.7 },
+  phone: {
+    width: 156,
+    height: 276,
+    borderRadius: 32,
+    backgroundColor: Palette.surface,
+    borderWidth: 1,
+    borderColor: Palette.brandTint2,
+    padding: 9,
+    transform: [{ rotate: '-5deg' }],
+    ...Shadow.lift,
+  },
+  notch: { alignSelf: 'center', width: 44, height: 6, borderRadius: 3, backgroundColor: Palette.line, marginBottom: 8 },
+  phoneScreen: { flex: 1, borderRadius: 24, backgroundColor: Palette.voltSofter, alignItems: 'center', justifyContent: 'center', gap: 14 },
+  finder: { width: 112, height: 112, alignItems: 'center', justifyContent: 'center' },
+  corner: { position: 'absolute', width: 24, height: 24, borderColor: Palette.volt },
+  cTL: { top: 0, left: 0, borderTopWidth: 4, borderLeftWidth: 4, borderTopLeftRadius: 10 },
+  cTR: { top: 0, right: 0, borderTopWidth: 4, borderRightWidth: 4, borderTopRightRadius: 10 },
+  cBL: { bottom: 0, left: 0, borderBottomWidth: 4, borderLeftWidth: 4, borderBottomLeftRadius: 10 },
+  cBR: { bottom: 0, right: 0, borderBottomWidth: 4, borderRightWidth: 4, borderBottomRightRadius: 10 },
+  scanLine: { position: 'absolute', width: 100, height: 3, borderRadius: 2, backgroundColor: Palette.volt, ...Shadow.volt },
+  phoneHint: { fontFamily: Font.semibold, fontSize: 11, color: Palette.forest, textAlign: 'center', paddingHorizontal: 10 },
+  plugPos: { position: 'absolute', top: '16%', right: '12%' },
+  plugBadge: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center', ...Shadow.volt },
+  boltPos: { position: 'absolute', bottom: '18%', left: '12%' },
+  boltBadge: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: Palette.surface,
+    borderWidth: 1,
+    borderColor: Palette.brandTint2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Shadow.lift,
+  },
 
-  // charge
-  carWrap: { position: 'absolute', left: 0, right: 0, top: 64, alignItems: 'center' },
-  car: { width: '94%', height: 210 },
-  chargeCard: { gap: 8, padding: Spacing.lg },
-  chargeTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  liveRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  liveText: { fontFamily: Font.semibold, fontSize: 13, color: Palette.forest },
-  pct: { fontFamily: Font.display, fontSize: 18, color: Palette.ink },
-  track: { height: 8, borderRadius: 4, backgroundColor: Palette.voltSoft, overflow: 'hidden' },
-  fill: { height: 8, borderRadius: 4 },
-  eta: { fontFamily: Font.medium, fontSize: 12, color: Palette.mist },
-
-  // wallet
-  walletPos: { position: 'absolute', top: 18, left: 16, right: 16 },
-  walletCard: { padding: Spacing.lg, gap: 6 },
-  walletTop: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  walletIcon: { width: 28, height: 28, borderRadius: 14, backgroundColor: Palette.voltSoft, alignItems: 'center', justifyContent: 'center' },
-  walletLabel: { fontFamily: Font.semibold, fontSize: 13, color: Palette.inkSoft },
-  walletAmount: { fontFamily: Font.display, fontSize: 28, color: Palette.ink },
-  addMoney: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', backgroundColor: Palette.volt, borderRadius: Radius.pill, paddingHorizontal: Spacing.md, paddingVertical: 6 },
-  addMoneyText: { fontFamily: Font.bold, fontSize: 12, color: Palette.white },
-  receiptPos: { position: 'absolute', left: 30, right: 16 },
-  receipt: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, paddingVertical: 10 },
-  receiptIcon: { width: 32, height: 32, borderRadius: 16, backgroundColor: Palette.voltSoft, alignItems: 'center', justifyContent: 'center' },
-  receiptTitle: { fontFamily: Font.semibold, fontSize: 13, color: Palette.ink },
-  receiptMeta: { fontFamily: Font.regular, fontSize: 12, color: Palette.mist },
-  receiptCost: { fontFamily: Font.display, fontSize: 15, color: Palette.forest },
-  plus: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, borderRadius: 18, padding: Spacing.md, ...Shadow.volt },
-  plusIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: Palette.white, alignItems: 'center', justifyContent: 'center' },
-  plusTitle: { fontFamily: Font.displaySemi, fontSize: 15, color: Palette.white },
-  plusMeta: { fontFamily: Font.medium, fontSize: 12, color: 'rgba(255,255,255,0.88)', marginTop: 1 },
+  // pay
+  orbit: { width: ORBIT, height: ORBIT, borderRadius: ORBIT / 2, borderWidth: 2, borderStyle: 'dashed', borderColor: Palette.brandTint2 },
+  orbitBadge: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: Palette.surface,
+    borderWidth: 1,
+    borderColor: Palette.brandTint2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Shadow.soft,
+  },
+  coin: { width: 128, height: 128, borderRadius: 64, alignItems: 'center', justifyContent: 'center', ...Shadow.volt },
+  coinRing: { position: 'absolute', top: 10, left: 10, right: 10, bottom: 10, borderRadius: 54, borderWidth: 2, borderColor: 'rgba(255,255,255,0.35)' },
+  coinSymbol: { fontFamily: Font.display, fontSize: 60, lineHeight: 70, color: Palette.white },
+  kwhPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: -14,
+    backgroundColor: Palette.surface,
+    borderRadius: Radius.pill,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 6,
+    ...Shadow.soft,
+  },
+  kwhText: { fontFamily: Font.bold, fontSize: 13, color: Palette.forest },
 
   // footer
   footer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: Spacing.xxl },

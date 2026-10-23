@@ -3,6 +3,7 @@ import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 
+import { MAP_STYLE } from '@/constants/map-style';
 import { Font, Palette } from '@/constants/theme';
 import type { Station } from '@/data/mock';
 
@@ -23,19 +24,6 @@ if (!IS_EXPO_GO) {
   }
 }
 
-const MAP_STYLE = [
-  { elementType: 'geometry', stylers: [{ color: '#eef3ec' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#5e6f64' }] },
-  { elementType: 'labels.text.stroke', stylers: [{ color: '#eef3ec' }] },
-  { featureType: 'poi', stylers: [{ visibility: 'off' }] },
-  { featureType: 'transit', stylers: [{ visibility: 'off' }] },
-  { featureType: 'poi.park', elementType: 'geometry', stylers: [{ color: '#d6f0db' }] },
-  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#ffffff' }] },
-  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#e4ebe1' }] },
-  { featureType: 'road', elementType: 'labels.icon', stylers: [{ visibility: 'off' }] },
-  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#bfe3cf' }] },
-  { featureType: 'administrative', elementType: 'geometry', stylers: [{ visibility: 'off' }] },
-];
 
 /** White map-pin with a green charger icon (available) or grey (offline). */
 function ChargerPin({ available }: { available: boolean }) {
