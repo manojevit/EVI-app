@@ -15,11 +15,11 @@ type BottomTabBarProps = {
 };
 
 const ICONS: Record<string, { on: keyof typeof Ionicons.glyphMap; off: keyof typeof Ionicons.glyphMap }> = {
-  index: { on: 'map', off: 'map-outline' },
+  map: { on: 'map', off: 'map-outline' },
   sessions: { on: 'flash', off: 'flash-outline' },
   account: { on: 'person', off: 'person-outline' },
 };
-const LABELS: Record<string, string> = { index: 'Map', sessions: 'Charging', account: 'Account' };
+const LABELS: Record<string, string> = { map: 'Map', sessions: 'Charging', account: 'Account' };
 
 /** Floating tab bar — active tab expands into a gradient pill with its label. */
 export default function BottomTabBar({ state, emitter, navigateToTab }: BottomTabBarProps) {

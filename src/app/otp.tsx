@@ -60,7 +60,7 @@ export default function OtpScreen() {
   const verify = (value: string) => {
     if (value.length !== LENGTH || verifying) return;
     setVerifying(true);
-    setTimeout(() => router.replace('/(tabs)'), 700);
+    setTimeout(() => router.replace('/map'), 700);
   };
 
   const onChange = (v: string) => {

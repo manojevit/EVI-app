@@ -17,7 +17,7 @@ import { Palette } from '@/constants/theme';
 SplashScreen.preventAutoHideAsync();
 
 export const unstable_settings = {
-  initialRouteName: 'login',
+  initialRouteName: 'index', // launch animation → onboarding → login
 };
 
 export default function RootLayout() {
@@ -42,7 +42,9 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <StatusBar style="dark" />
         <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: Palette.canvas } }}>
-          <Stack.Screen name="login" />
+          <Stack.Screen name="index" options={{ animation: 'none' }} />
+          <Stack.Screen name="onboarding" options={{ animation: 'fade' }} />
+          <Stack.Screen name="login" options={{ animation: 'fade' }} />
           <Stack.Screen name="otp" />
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="station/[id]" />
