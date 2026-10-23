@@ -5,7 +5,7 @@ import { FlatList, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'r
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import StationCard from '@/components/station-card';
-import StationMap from '@/components/station-map';
+import LiveMap from '@/components/live-map';
 import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
 import { ACCOUNT, STATIONS } from '@/data/mock';
 import { s, scaledSheet } from '@/constants/responsive';
@@ -39,7 +39,13 @@ export default function HomeScreen() {
           showsVerticalScrollIndicator={false}
         />
       ) : (
-        <StationMap stations={stations} />
+        <LiveMap
+          pins={stations.map((st) => ({ id: st.id, latitude: st.latitude, longitude: st.longitude, available: st.status === 'Available' }))}
+          // keep pins clear of the search bar + chips above and the tab bar below
+          // (+52 on top: padding counts to a pin's tip, and the pin head is ~52pt tall)
+          padding={{ top: topPad + s(150) + 52, bottom: s(130), left: s(40), right: s(40) }}
+          onPinPress={(id) => router.push(`/station/${id}`)}
+        />
       )}
 
       {/* Floating controls */}

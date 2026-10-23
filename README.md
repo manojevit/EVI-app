@@ -4,7 +4,7 @@ A React Native + Expo prototype of the EVIT (EVI Technologies) EV-charging app.
 **Design prototype only:** all data is sample data and there is no backend.
 
 - **Framework:** Expo SDK 58 + Expo Router (file-based navigation)
-- **Maps:** `react-native-maps` with Google Maps
+- **Maps:** MapLibre GL + OpenFreeMap (OpenStreetMap). Free, no API key, no billing
 - **Camera:** `expo-camera` for scanning charger QR codes
 - **Delivery:** Android APK via EAS Build
 
@@ -12,7 +12,7 @@ A React Native + Expo prototype of the EVIT (EVI Technologies) EV-charging app.
 
 ## Screens
 
-The app opens on **Login**. Screenshots of every screen are in [`screenshots/`](screenshots).
+The app opens with a launch animation, then **Onboarding** (3 slides), then **Login**.
 
 | Area | Screen | How to reach it |
 |------|--------|-----------------|
@@ -34,32 +34,20 @@ The app opens on **Login**. Screenshots of every screen are in [`screenshots/`](
 
 ```bash
 npm install
-cp .env.example .env.local      # then put your Google Maps key in .env.local
 npx expo start
 ```
 
 Scan the QR with **Expo Go** (Android) or the Camera app (iOS).
 
-> **About the map in Expo Go:** `react-native-maps` isn't included in Expo Go, so the
-> Map tab shows a placeholder there. Use the list button to browse stations. The real
-> Google map appears in a development build or the APK.
-
 ---
 
-## 2. Google Maps API key
+## 2. The map (free, no key)
 
-The key is **not** stored in this repo. `app.config.js` reads `GOOGLE_MAPS_API_KEY` from
-the environment and adds it to the iOS and Android config at build time.
-
-- **Locally:** put it in `.env.local` (git-ignored). Expo loads it automatically.
-- **EAS builds:** store it once as a sensitive EAS environment variable:
-
-  ```bash
-  eas env:create --name GOOGLE_MAPS_API_KEY --value <your-key> --environment preview --visibility sensitive
-  ```
-
-**Recommended:** in Google Cloud Console, restrict the key to the Android package
-`com.evit.app` (and the iOS bundle ID) so it can't be used by other apps.
+The Map tab and the first onboarding slide use **MapLibre GL JS** with
+**OpenFreeMap** vector tiles (OpenStreetMap data), shown in a WebView
+(`src/components/live-map*.ts(x)`). There is no API key, no billing and no usage limit,
+and it works the same in Expo Go, the APK and the web build. Station pins are part of the
+map page and open the station screen when tapped. The map needs an internet connection.
 
 ---
 
@@ -95,7 +83,8 @@ straight-line from a sample point in central Delhi, since the prototype has no G
 
 ## Design system
 
-`src/constants/theme.ts` holds the palette, type and spacing. The palette is built on the
+`src/constants/theme.ts` holds the palette, type and spacing. `src/constants/responsive.ts`
+scales sizes to the phone's screen width (use `scaledSheet` instead of `StyleSheet.create`). The palette is built on the
 logo green `#20944C`: light green-tinted neutrals, one brand-green accent, amber only for
 "in use", red only for stop/errors. Type is **Sora** (headings, numbers) and **Inter** (UI).
 

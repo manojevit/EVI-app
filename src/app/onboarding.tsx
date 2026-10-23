@@ -27,8 +27,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
 
 import BrandLogo from '@/components/brand-logo';
-import OnboardingMap from '@/components/onboarding-map';
-import { projectFromCenter } from '@/constants/map-style';
+import LiveMap from '@/components/live-map';
 import { fs } from '@/constants/responsive';
 import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
 import { STATIONS } from '@/data/mock';
@@ -104,50 +103,21 @@ function Layer({
   return <Animated.View style={[style, a]}>{children}</Animated.View>;
 }
 
-// ---------- slide 1: real map + live pins ----------
+// ---------- slide 1: live map + pins ----------
 
-function MapPin({ x, y, order, available }: { x: number; y: number; order: number; available: boolean }) {
-  const drop = useSharedValue(0);
-  const pulse = useLoop(1800, { delay: order * 260 });
-  useEffect(() => {
-    drop.value = withDelay(250 + order * 110, withSpring(1, { damping: 11, stiffness: 180 }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-  const pinStyle = useAnimatedStyle(() => ({
-    opacity: Math.min(drop.value * 2, 1),
-    transform: [{ translateY: (1 - drop.value) * -26 }, { scale: 0.6 + drop.value * 0.4 }],
-  }));
-  const ringStyle = useAnimatedStyle(() => ({
-    opacity: available ? (1 - pulse.value) * 0.45 * Math.min(drop.value, 1) : 0,
-    transform: [{ scale: 0.5 + pulse.value * 1.5 }],
-  }));
-  return (
-    // the pin's tip sits exactly on (x, y)
-    <View style={[styles.pinAnchor, { transform: [{ translateX: x }, { translateY: y - PIN_H / 2 }] }]} pointerEvents="none">
-      <Animated.View style={[styles.pinPulse, ringStyle]} />
-      <Animated.View style={[styles.pinCol, pinStyle]}>
-        <View style={[styles.pin, !available && styles.pinOff]}>
-          <MaterialCommunityIcons name="ev-station" size={16} color={available ? Palette.forest : Palette.mistLight} />
-        </View>
-        <View style={[styles.pinStem, !available && styles.pinStemOff]} />
-      </Animated.View>
-    </View>
-  );
-}
+const ONBOARDING_PINS = STATIONS.map((st) => ({
+  id: st.id,
+  latitude: st.latitude,
+  longitude: st.longitude,
+  available: st.status === 'Available',
+}));
 
 function MapVisual({ scrollX, width }: { scrollX: SharedValue<number>; width: number }) {
+  // free MapLibre map with every EVIT station; pins drop in and pulse when free
   return (
-    <>
-      <Layer scrollX={scrollX} index={0} width={width} depth={0.2} style={StyleSheet.absoluteFill}>
-        <OnboardingMap />
-      </Layer>
-      <Layer scrollX={scrollX} index={0} width={width} depth={0.32} style={[StyleSheet.absoluteFill, styles.center]}>
-        {STATIONS.map((s, i) => {
-          const { x, y } = projectFromCenter(s.latitude, s.longitude);
-          return <MapPin key={s.id} x={x} y={y} order={i} available={s.status === 'Available'} />;
-        })}
-      </Layer>
-    </>
+    <Layer scrollX={scrollX} index={0} width={width} depth={0.2} style={StyleSheet.absoluteFill}>
+      <LiveMap pins={ONBOARDING_PINS} interactive={false} animatePins padding={{ top: 50, bottom: 40, left: 40, right: 40 }} />
+    </Layer>
   );
 }
 
