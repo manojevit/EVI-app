@@ -43,5 +43,13 @@ const PHOTOS: Record<string, any> = {
 };
 /* eslint-enable @typescript-eslint/no-require-imports */
 
+// Extra looks (colours / angles) per model. Add more images here as the photo pack grows;
+// Add a vehicle shows a picker whenever a model has more than one.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const EXTRA_PHOTOS: Record<string, any[]> = {};
+
 export const vehiclePhoto = (model: string | null | undefined) => (model ? PHOTOS[model] ?? null : null);
 export const hasVehiclePhoto = (model: string) => model in PHOTOS;
+/** Every photo available for a model (first = default); empty if the pack has none yet. */
+export const vehiclePhotos = (model: string | null | undefined) =>
+  model && PHOTOS[model] ? [PHOTOS[model], ...(EXTRA_PHOTOS[model] ?? [])] : [];
