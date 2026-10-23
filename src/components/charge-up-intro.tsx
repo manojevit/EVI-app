@@ -1,7 +1,6 @@
-import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import Animated, {
   cancelAnimation,
   Easing,
@@ -9,7 +8,6 @@ import Animated, {
   interpolate,
   runOnJS,
   useAnimatedProps,
-  useAnimatedReaction,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
@@ -31,7 +29,7 @@ import { Font, Palette } from '@/constants/theme';
  * 2. The dot rises onto the ring and becomes a comet that draws the charge arc;
  *    an odometer counter rolls 0 → 100.
  * 3. Wind-up: the ring compresses (anticipation), then a bolt strikes — sparks,
- *    double shockwave, a short screen shake and a heavy haptic.
+ *    double shockwave and a short screen shake (no vibration).
  * 4. Brand-green floods out from the bolt, the bolt turns white and hands over
  *    to the white EVIT logo (same look as the app icon); the tagline staggers in.
  * 5. The green contracts back into the centre, revealing onboarding.
@@ -107,19 +105,6 @@ const INTAKE = Array.from({ length: 22 }, (_, i) => ({
 const TICKS = 48;
 const TICK_R = R + 20;
 const LIME = '#B6F09C';
-
-function haptic(kind: 'tick' | 'wind' | 'strike') {
-  if (Platform.OS === 'web') return;
-  const style =
-    kind === 'strike'
-      ? Haptics.ImpactFeedbackStyle.Heavy
-      : kind === 'wind'
-        ? Haptics.ImpactFeedbackStyle.Medium
-        : Haptics.ImpactFeedbackStyle.Light;
-  Haptics.impactAsync(style).catch(() => {
-    // haptics unavailable — the animation still runs
-  });
-}
 
 // ---------- pieces ----------
 
@@ -369,21 +354,6 @@ export default function ChargeUpIntro({ onDone }: { onDone: () => void }) {
     // shared values are stable; run once
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reduceMotion]);
-
-  // Haptics, driven from the UI thread so they land exactly on the frame.
-  useAnimatedReaction(
-    () => Math.floor(progress.value * 4),
-    (q, prev) => {
-      if (prev === null || q === prev) return;
-      runOnJS(haptic)(q >= 4 ? 'wind' : 'tick');
-    },
-  );
-  useAnimatedReaction(
-    () => bolt.value > 0.05,
-    (hit, prev) => {
-      if (hit && prev === false) runOnJS(haptic)('strike');
-    },
-  );
 
   // ---- styles ----
   const stageStyle = useAnimatedStyle(() => {

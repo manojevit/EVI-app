@@ -11,15 +11,14 @@ import VoltButton from '@/components/volt-button';
 import { scaledSheet } from '@/constants/responsive';
 import { Font, Palette, Radius, Spacing } from '@/constants/theme';
 import { CONNECTORS } from '@/data/connectors';
-import { vehiclePhotos } from '@/data/vehicle-images';
-import { VEHICLE_TYPES, makesFor, modelsFor, type VehicleModel, type VehicleType } from '@/data/vehicles';
+import { CATALOG_MAKES, VEHICLE_CATALOG, type CatalogCar } from '@/data/vehicle-catalog';
 
-/** Short badge text for a manufacturer: "BMW", "Tata Motors" → "TM", "Morris Garages" → "MG". */
+/** Short badge text for a brand: "BMW", "Tata Motors" → "TM", "MG Motor" → "MG". */
 const monogram = (make: string) =>
   make.length <= 4
     ? make.toUpperCase()
     : make
-        .split(/\s+/)
+        .split(/[\s-]+/)
         .slice(0, 2)
         .map((w) => w[0])
         .join('')
@@ -30,37 +29,25 @@ const TOP_MAKES = 9; // brands shown before "Show all"
 export default function AddVehicleSheet() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [type, setType] = useState<VehicleType>('LMV');
   const [make, setMake] = useState<string | null>(null);
   const [modelName, setModelName] = useState<string | null>(null);
-  const [look, setLook] = useState(0); // which photo of the model
+  const [look, setLook] = useState(0); // which photo of the car
   const [query, setQuery] = useState('');
   const [showAllMakes, setShowAllMakes] = useState(false);
   const [plate, setPlate] = useState('');
 
-  const typeInfo = VEHICLE_TYPES.find((t) => t.key === type)!;
-
-  // manufacturers with the most models first; search matches a make or any of its models
+  // brands (most models first); search matches a brand or any of its models
   const makes = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return makesFor(type)
-      .map((m) => ({ make: m, models: modelsFor(type, m) }))
-      .filter(
-        ({ make: m, models }) => !q || m.toLowerCase().includes(q) || models.some((v) => v.model.toLowerCase().includes(q)),
-      )
-      .sort((a, b) => b.models.length - a.models.length || a.make.localeCompare(b.make));
-  }, [type, query]);
+    return CATALOG_MAKES.map((m) => ({ make: m, models: VEHICLE_CATALOG.filter((c) => c.make === m) })).filter(
+      ({ make: m, models }) => !q || m.toLowerCase().includes(q) || models.some((c) => c.model.toLowerCase().includes(q)),
+    );
+  }, [query]);
 
-  const models = useMemo(() => (make ? modelsFor(type, make) : []), [type, make]);
-  const model = models.find((m) => m.model === modelName) ?? null;
-  const photos = vehiclePhotos(model?.model);
+  const models = useMemo(() => (make ? VEHICLE_CATALOG.filter((c) => c.make === make) : []), [make]);
+  const car = models.find((c) => c.model === modelName) ?? null;
+  const photos = car?.photos ?? [];
 
-  const pickType = (t: VehicleType) => {
-    setType(t);
-    setMake(null);
-    setModelName(null);
-    setQuery('');
-  };
   const pickMake = (m: string | null) => {
     setMake(m);
     setModelName(null);
@@ -84,23 +71,20 @@ export default function AddVehicleSheet() {
         </View>
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: Spacing.lg }} keyboardShouldPersistTaps="handled">
-          {/* large live preview of the selected model */}
+          {/* large live preview of the selected car */}
           <LinearGradient colors={Palette.gradHero} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.preview}>
             <View style={styles.pvArt}>
               {photos.length ? (
                 <Image source={photos[Math.min(look, photos.length - 1)]} style={styles.pvPhoto} contentFit="contain" transition={200} />
               ) : (
-                <View style={styles.pvFallback}>
-                  <MaterialCommunityIcons name={typeInfo.icon} size={72} color={model ? Palette.volt : Palette.brandTint2} />
-                  {make ? <Text style={styles.pvMono}>{monogram(make)}</Text> : null}
-                </View>
+                <MaterialCommunityIcons name="car-side" size={72} color={Palette.brandTint2} />
               )}
             </View>
-            <Text style={styles.pvName}>{model?.model ?? 'Your vehicle'}</Text>
-            <Text style={styles.pvSub}>{make ? `${make} · ${typeInfo.label}` : `${typeInfo.label} · pick a manufacturer`}</Text>
-            {model ? (
+            <Text style={styles.pvName}>{car ? `${car.make} ${car.model}` : 'Your car'}</Text>
+            <Text style={styles.pvSub}>{car ? 'Car' : make ? `${make} · pick a model` : 'Pick a brand to start'}</Text>
+            {car ? (
               <View style={styles.pvTags}>
-                {model.connectors.map((k) => (
+                {car.connectors.map((k) => (
                   <View key={k} style={styles.pvTag}>
                     <ConnectorIcon type={k} size={14} />
                     <Text style={styles.pvTagText}>{CONNECTORS[k].label}</Text>
@@ -109,7 +93,7 @@ export default function AddVehicleSheet() {
               </View>
             ) : null}
 
-            {/* choose a look when the pack has several photos of this model */}
+            {/* choose a look when there are several photos of this car */}
             {photos.length > 1 ? (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.looks}>
                 {photos.map((p, i) => (
@@ -121,22 +105,8 @@ export default function AddVehicleSheet() {
             ) : null}
           </LinearGradient>
 
-          {/* 1. type */}
-          <Step n={1} text="Vehicle type" />
-          <View style={styles.typeRow}>
-            {VEHICLE_TYPES.map((t) => {
-              const on = t.key === type;
-              return (
-                <TouchableOpacity key={t.key} onPress={() => pickType(t.key)} activeOpacity={0.85} style={[styles.typeTile, on && styles.tileOn]}>
-                  <MaterialCommunityIcons name={t.icon} size={28} color={on ? Palette.forest : Palette.mist} />
-                  <Text style={[styles.typeLabel, on && { color: Palette.forest }]}>{t.label}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          {/* 2. manufacturer: searchable grid */}
-          <Step n={2} text="Manufacturer" />
+          {/* 1. brand: searchable grid */}
+          <Step n={1} text="Brand" />
           <View style={styles.search}>
             <Ionicons name="search" size={18} color={Palette.mist} />
             <TextInput
@@ -172,53 +142,53 @@ export default function AddVehicleSheet() {
               </TouchableOpacity>
             </View>
           ) : (
-          <View style={styles.makeGrid}>
-            {(query || showAllMakes ? makes : makes.slice(0, TOP_MAKES)).map(({ make: m, models: ms }) => {
-              const on = m === make;
-              return (
-                <TouchableOpacity key={m} onPress={() => pickMake(m)} activeOpacity={0.85} style={[styles.makeTile, on && styles.tileOn]}>
-                  <View style={[styles.mono, on && styles.monoOn]}>
-                    <Text style={[styles.monoText, on && { color: Palette.white }]} numberOfLines={1}>
-                      {monogram(m)}
+            <View style={styles.makeGrid}>
+              {(query || showAllMakes ? makes : makes.slice(0, TOP_MAKES)).map(({ make: m, models: ms }) => {
+                const on = m === make;
+                return (
+                  <TouchableOpacity key={m} onPress={() => pickMake(m)} activeOpacity={0.85} style={[styles.makeTile, on && styles.tileOn]}>
+                    <View style={[styles.mono, on && styles.monoOn]}>
+                      <Text style={[styles.monoText, on && { color: Palette.white }]} numberOfLines={1}>
+                        {monogram(m)}
+                      </Text>
+                    </View>
+                    <Text style={[styles.makeName, on && { color: Palette.forest }]} numberOfLines={1}>
+                      {m}
                     </Text>
-                  </View>
-                  <Text style={[styles.makeName, on && { color: Palette.forest }]} numberOfLines={1}>
-                    {m}
-                  </Text>
-                  <Text style={styles.makeCount}>
-                    {ms.length} {ms.length === 1 ? 'model' : 'models'}
-                  </Text>
+                    <Text style={styles.makeCount}>
+                      {ms.length} {ms.length === 1 ? 'model' : 'models'}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+              {makes.length === 0 ? <Text style={styles.waiting}>No brand or model matches “{query}”.</Text> : null}
+              {!query && !showAllMakes && makes.length > TOP_MAKES ? (
+                <TouchableOpacity onPress={() => setShowAllMakes(true)} activeOpacity={0.85} style={styles.showAll}>
+                  <Text style={styles.showAllText}>Show all {makes.length} brands</Text>
+                  <Ionicons name="chevron-down" size={16} color={Palette.forest} />
                 </TouchableOpacity>
-              );
-            })}
-            {makes.length === 0 ? <Text style={styles.waiting}>No brand or model matches “{query}”.</Text> : null}
-            {!query && !showAllMakes && makes.length > TOP_MAKES ? (
-              <TouchableOpacity onPress={() => setShowAllMakes(true)} activeOpacity={0.85} style={styles.showAll}>
-                <Text style={styles.showAllText}>Show all {makes.length} brands</Text>
-                <Ionicons name="chevron-down" size={16} color={Palette.forest} />
-              </TouchableOpacity>
-            ) : null}
-          </View>
+              ) : null}
+            </View>
           )}
 
-          {/* 3. model: photo cards */}
-          <Step n={3} text={make ? `${make} models` : 'Model'} />
+          {/* 2. model: photo cards */}
+          <Step n={2} text={make ? `${make} models` : 'Model'} />
           {make ? (
             <View style={styles.modelGrid}>
-              {models.map((m) => (
-                <ModelCard key={m.model} m={m} on={m.model === modelName} icon={typeInfo.icon} onPress={() => pickModel(m.model)} />
+              {models.map((c) => (
+                <ModelCard key={c.model} car={c} on={c.model === modelName} onPress={() => pickModel(c.model)} />
               ))}
             </View>
           ) : (
-            <Text style={styles.waiting}>Pick a manufacturer to see its models.</Text>
+            <Text style={styles.waiting}>Pick a brand to see its models.</Text>
           )}
 
-          {/* 4. connectors (auto) */}
-          <Step n={4} text="Supported connectors" />
-          {model ? (
+          {/* 3. connectors (auto) */}
+          <Step n={3} text="Supported connectors" />
+          {car ? (
             <>
               <View style={styles.wrapRow}>
-                {model.connectors.map((k) => (
+                {car.connectors.map((k) => (
                   <View key={k} style={styles.connTile}>
                     <ConnectorIcon type={k} size={30} />
                     <View>
@@ -228,7 +198,7 @@ export default function AddVehicleSheet() {
                   </View>
                 ))}
               </View>
-              <Text style={styles.hint}>Filled in automatically for the {model.model}. We&apos;ll show stations with these connectors first.</Text>
+              <Text style={styles.hint}>Filled in automatically for the {car.model}. We&apos;ll show stations with these connectors first.</Text>
             </>
           ) : (
             <Text style={styles.waiting}>Filled in automatically once you pick a model.</Text>
@@ -239,39 +209,28 @@ export default function AddVehicleSheet() {
             <TextInput value={plate} onChangeText={setPlate} placeholder="e.g. DL 01 AB 1234" placeholderTextColor={Palette.mistLight} autoCapitalize="characters" style={styles.input} />
           </View>
 
-          <VoltButton label="Add vehicle" icon="add" disabled={!model} onPress={() => router.back()} style={{ marginTop: Spacing.xxl }} />
+          <VoltButton label="Add vehicle" icon="add" disabled={!car} onPress={() => router.back()} style={{ marginTop: Spacing.xxl }} />
         </ScrollView>
       </View>
     </View>
   );
 }
 
-function ModelCard({
-  m,
-  on,
-  icon,
-  onPress,
-}: {
-  m: VehicleModel;
-  on: boolean;
-  icon: (typeof VEHICLE_TYPES)[number]['icon'];
-  onPress: () => void;
-}) {
-  const photo = vehiclePhotos(m.model)[0];
+function ModelCard({ car, on, onPress }: { car: CatalogCar; on: boolean; onPress: () => void }) {
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.85} style={[styles.modelCard, on && styles.modelOn]}>
       <View style={styles.modelArt}>
-        {photo ? (
-          <Image source={photo} style={styles.modelImg} contentFit="contain" />
+        {car.photos[0] ? (
+          <Image source={car.photos[0]} style={styles.modelImg} contentFit="contain" />
         ) : (
-          <MaterialCommunityIcons name={icon} size={44} color={on ? Palette.volt : Palette.brandTint2} />
+          <MaterialCommunityIcons name="car-side" size={44} color={Palette.brandTint2} />
         )}
       </View>
       <Text style={styles.modelName} numberOfLines={2}>
-        {m.model}
+        {car.model}
       </Text>
       <Text style={styles.modelConn} numberOfLines={1}>
-        {m.connectors.map((k) => CONNECTORS[k].label).join(' · ')}
+        {car.connectors.map((k) => CONNECTORS[k].label).join(' · ')}
       </Text>
       {on ? (
         <View style={styles.check}>
@@ -305,8 +264,6 @@ const styles = scaledSheet({
   preview: { alignItems: 'center', borderRadius: Radius.card, padding: Spacing.lg, borderWidth: 1, borderColor: Palette.brandTint2 },
   pvArt: { width: '100%', height: 130, alignItems: 'center', justifyContent: 'center' },
   pvPhoto: { width: '88%', height: 130 },
-  pvFallback: { alignItems: 'center', gap: 2 },
-  pvMono: { fontFamily: Font.display, fontSize: 13, color: Palette.forest, letterSpacing: 1 },
   pvName: { fontFamily: Font.display, fontSize: 20, color: Palette.ink, marginTop: Spacing.sm, textAlign: 'center' },
   pvSub: { fontFamily: Font.regular, fontSize: 13, color: Palette.mist, marginTop: 2, textAlign: 'center' },
   pvTags: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 6, marginTop: Spacing.sm },
@@ -322,11 +279,7 @@ const styles = scaledSheet({
   stepNumText: { fontFamily: Font.bold, fontSize: 12, color: Palette.white },
   stepText: { fontFamily: Font.semibold, fontSize: 15, color: Palette.ink },
 
-  typeRow: { flexDirection: 'row', gap: Spacing.sm },
-  typeTile: { flex: 1, alignItems: 'center', gap: 6, backgroundColor: Palette.surface, borderWidth: 1.5, borderColor: Palette.line, borderRadius: Radius.chip, paddingVertical: Spacing.md },
   tileOn: { borderColor: Palette.volt, backgroundColor: Palette.voltSofter },
-  typeLabel: { fontFamily: Font.semibold, fontSize: 12, color: Palette.mist, textAlign: 'center' },
-
   search: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, backgroundColor: Palette.surface, borderWidth: 1, borderColor: Palette.line, borderRadius: Radius.pill, paddingHorizontal: Spacing.lg, height: 46, marginBottom: Spacing.md },
   searchInput: { flex: 1, fontFamily: Font.medium, fontSize: 15, color: Palette.ink, padding: 0 },
   makeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
