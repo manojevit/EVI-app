@@ -30,8 +30,12 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# local env files
+# local env files (secrets such as GOOGLE_MAPS_API_KEY live here)
+.env
 .env*.local
+
+# original asset packs — the app uses the extracted images in assets/images
+assets/images/*.zip
 
 # typescript
 *.tsbuildinfo

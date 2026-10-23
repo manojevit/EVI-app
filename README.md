@@ -1,56 +1,113 @@
-# Welcome to your Expo app 👋
+# EVI-app — EVIT EV Charging App (Prototype)
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A React Native + Expo prototype of the EVIT (EVI Technologies) EV-charging app.
+**Design prototype only:** all data is sample data and there is no backend.
 
-## Get started
+- **Framework:** Expo SDK 58 + Expo Router (file-based navigation)
+- **Maps:** `react-native-maps` with Google Maps
+- **Camera:** `expo-camera` for scanning charger QR codes
+- **Delivery:** Android APK via EAS Build
 
-1. Install dependencies
+---
 
-   ```bash
-   npm install
-   ```
+## Screens
 
-2. Start the app
+The app opens on **Login**. Screenshots of every screen are in [`screenshots/`](screenshots).
 
-   ```bash
-   npx expo start
-   ```
+| Area | Screen | How to reach it |
+|------|--------|-----------------|
+| Sign in | **Login** (mobile number + consent) → **Verify OTP** | app launch |
+| Map | **Map** with charger pins, search, filters, wallet | Map tab |
+| Map | **Station list** | list button on the Map tab |
+| Map | **Station detail**: chargers → connectors, distance + Navigate, "fits your car" | tap a pin or a station |
+| Map | **Filters** sheet, **Notifications** | filter / bell buttons |
+| Map | **Scan to charge**: camera QR scanner + enter charger ID | QR button |
+| Charging | **Live session**: charge ring, power, energy, cost, time, Stop | Charging tab |
+| Charging | **History** with month filter, Completed / Cancelled | receipt button |
+| Account | Profile, wallet, menu, Log out | Account tab |
+| Account | **My vehicles**, **Add a vehicle** (type → make → model, connectors auto-filled) | Account → My vehicles |
+| Account | **Plans**, **Support**, **Profile** | Account menu |
 
-In the output, you'll find options to open the app in a
+---
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **src/app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+## 1. Set up and run
 
 ```bash
-npm run reset-project
+npm install
+cp .env.example .env.local      # then put your Google Maps key in .env.local
+npx expo start
 ```
 
-This command will move the starter code to the **example** directory and create a blank **src/app** directory where you can start developing.
+Scan the QR with **Expo Go** (Android) or the Camera app (iOS).
 
-### Other setup steps
+> **About the map in Expo Go:** `react-native-maps` isn't included in Expo Go, so the
+> Map tab shows a placeholder there. Use the list button to browse stations. The real
+> Google map appears in a development build or the APK.
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+---
 
-## Learn more
+## 2. Google Maps API key
 
-To learn more about developing your project with Expo, look at the following resources:
+The key is **not** stored in this repo. `app.config.js` reads `GOOGLE_MAPS_API_KEY` from
+the environment and adds it to the iOS and Android config at build time.
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+- **Locally:** put it in `.env.local` (git-ignored). Expo loads it automatically.
+- **EAS builds:** store it once as a sensitive EAS environment variable:
 
-## Join the community
+  ```bash
+  eas env:create --name GOOGLE_MAPS_API_KEY --value <your-key> --environment preview --visibility sensitive
+  ```
 
-Join our community of developers creating universal apps.
+**Recommended:** in Google Cloud Console, restrict the key to the Android package
+`com.evit.app` (and the iOS bundle ID) so it can't be used by other apps.
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+---
+
+## 3. Build the APK (EAS)
+
+```bash
+npm install -g eas-cli
+eas login
+eas init                                   # first time only, links the project
+eas build -p android --profile preview
+```
+
+EAS prints a link to download the `.apk`. Install it on any Android phone
+(allow "Install unknown apps").
+
+---
+
+## Data and assets
+
+| What | Where | Source |
+|------|-------|--------|
+| 7 connector types + icons | `src/data/connectors.ts`, `assets/images/connectors/` | EV_Connector_Data |
+| 121 vehicle models → supported connectors | `src/data/vehicles.ts` (generated) | `1_Vehicle_Connector_List.txt` |
+| Car photos (18 models) | `src/data/vehicle-images.ts`, `assets/images/vehicles/` | EVIT EV vehicle pack |
+| Stations, sessions, wallet, tickets | `src/data/mock.ts` | sample data |
+| Logo | `assets/images/logo-mark.png` | official EVIT logo |
+| Login background | `assets/images/login-bg.jpg` | login page design |
+
+Stations follow the real structure **station → chargers → connectors**. Distances are
+straight-line from a sample point in central Delhi, since the prototype has no GPS.
+
+---
+
+## Design system
+
+`src/constants/theme.ts` holds the palette, type and spacing. The palette is built on the
+logo green `#20944C`: light green-tinted neutrals, one brand-green accent, amber only for
+"in use", red only for stop/errors. Type is **Sora** (headings, numbers) and **Inter** (UI).
+
+## Project structure
+
+```
+src/
+  app/                 Expo Router screens
+    (tabs)/            Map · Charging · Account (custom floating tab bar)
+    station/[id].tsx   station detail
+    login.tsx, otp.tsx, scan.tsx, history.tsx, vehicles.tsx, add-vehicle.tsx, ...
+  components/          shared UI (charge ring, buttons, map, connector icon, ...)
+  constants/theme.ts   design tokens
+  data/                sample data, connectors, vehicles, vehicle photos
+```
