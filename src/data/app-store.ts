@@ -7,6 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSyncExternalStore } from 'react';
 
 import type { ConnectorKey } from '@/data/connectors';
+import { cancelReminders, remind } from '@/data/reminders';
 import {
   ACCOUNT,
   SESSION_HISTORY,
@@ -46,7 +47,6 @@ export const TIME_OPTIONS = [15, 30, 45, 60] as const;
  * short holds so busy chargers aren't blocked, one at a time, a few a day.
  */
 export const HOLD_OPTIONS = [10, 15, 20, 30] as const;
-export const DEFAULT_HOLD_MINS = 20;
 export const MAX_RESERVATIONS_PER_DAY = 3;
 
 export interface Reservation {
@@ -60,9 +60,33 @@ export interface Reservation {
   feeINR: number;
   /** 'booked' turns into upcoming / held / expired by the clock — see reservationState */
   status: 'booked' | 'used' | 'cancelled';
+  /** 'now' holds from booking; 'later' is a time slot booked ahead */
+  kind?: 'now' | 'later';
+  bookedAt?: number;
+  /** phone reminders still to fire, cancelled if the booking ends early */
+  reminderIds?: string[];
 }
 export type ReservationState = 'upcoming' | 'held' | 'expired' | 'used' | 'cancelled';
-export const RESERVATION_FEE = 30;
+/** Booking fee: still to be agreed with EVIT, so nothing is charged or shown yet (0 = free). */
+export const RESERVATION_FEE = 0;
+/** After the hold ends, the driver still has this long to plug in before it's released. */
+export const GRACE_MINS = 10;
+/** A slot booked for later is held this long from its start (then the grace period). */
+export const SLOT_HOLD_MINS = 15;
+export const SLOT_DAYS_AHEAD = 7;
+/** Missed reservations in a week that pause booking, and for how long. */
+export const NO_SHOW_LIMIT = 2;
+export const NO_SHOW_PAUSE_HOURS = 24;
+
+/** A reminder or update shown in the app's Notifications list (and as a phone notification). */
+export interface InboxItem {
+  id: string;
+  title: string;
+  body: string;
+  /** when it appears; future items wait until then */
+  at: number;
+  reservationId?: string;
+}
 
 export interface RfidCard {
   id: string;
@@ -107,6 +131,7 @@ interface AppState {
   readNotifications: string[];
   reservations: Reservation[];
   rfidCards: RfidCard[];
+  inbox: InboxItem[];
 }
 
 export interface UserLocation {
@@ -132,6 +157,7 @@ const fresh = (): AppState => ({
   onboarded: false,
   readNotifications: [],
   reservations: demoReservations(),
+  inbox: [],
   rfidCards: [{ id: 'rf1', uid: '04A13F9C2B7E81', name: 'My EVIT card', status: 'active', vehicleId: 'v1', addedLabel: 'Added 12 Oct 2026' }],
 });
 
@@ -158,7 +184,7 @@ const STORAGE_KEY = 'evit-app-state-v1';
 // location comes fresh from GPS each launch, so it isn't saved
 const SAVED: (keyof AppState)[] = [
   'session', 'walletBalance', 'txns', 'tickets', 'history', 'profile', 'vehicles',
-  'favourites', 'filters', 'planId', 'myReviews', 'signedIn', 'onboarded', 'readNotifications', 'reservations', 'rfidCards',
+  'favourites', 'filters', 'planId', 'myReviews', 'signedIn', 'onboarded', 'readNotifications', 'reservations', 'rfidCards', 'inbox',
 ];
 let hydrated = false;
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -271,12 +297,13 @@ export function startSession(stationId: string, chargerId: string, connectorId: 
   const station = STATIONS.find((x) => x.id === stationId);
   const charger = station?.chargers.find((c) => c.id === chargerId);
   const now = Date.now();
+  const used = state.reservations.find(
+    (r) => r.stationId === stationId && r.chargerId === chargerId && r.connectorId === connectorId && ['upcoming', 'held'].includes(reservationState(r, now)),
+  );
+  if (used) endReminders(used);
   set({
-    reservations: state.reservations.map((r) =>
-      r.stationId === stationId && r.chargerId === chargerId && r.connectorId === connectorId && ['upcoming', 'held'].includes(reservationState(r, now))
-        ? { ...r, status: 'used' as const }
-        : r,
-    ),
+    reservations: state.reservations.map((r) => (r === used ? { ...r, status: 'used' as const } : r)),
+    inbox: used ? dropPending(state.inbox, used.id) : state.inbox,
     session: {
       stationId,
       chargerId,
@@ -409,7 +436,20 @@ export function submitReview(stationId: string, r: { stars: number; text: string
 export function reservationState(r: Reservation, now = Date.now()): ReservationState {
   if (r.status !== 'booked') return r.status;
   if (now < r.startAt) return 'upcoming';
-  return now < r.startAt + r.holdMins * 60000 ? 'held' : 'expired';
+  return now < releaseAt(r) ? 'held' : 'expired';
+}
+/** End of the hold itself; the grace period runs after this. */
+export const holdEndsAt = (r: Reservation) => r.startAt + r.holdMins * 60000;
+/** When the connector goes back to everyone if the driver hasn't plugged in. */
+export const releaseAt = (r: Reservation) => holdEndsAt(r) + GRACE_MINS * 60000;
+export const inGrace = (r: Reservation, now = Date.now()) => r.status === 'booked' && now >= holdEndsAt(r) && now < releaseAt(r);
+
+/** Reservations missed in the last week; enough of them pauses booking for a while. */
+export function bookingPausedUntil(list: Reservation[], now = Date.now()): number | null {
+  const missed = list.filter((r) => reservationState(r, now) === 'expired' && now - releaseAt(r) < 7 * 86400000);
+  if (missed.length < NO_SHOW_LIMIT) return null;
+  const until = Math.max(...missed.map(releaseAt)) + NO_SHOW_PAUSE_HOURS * 3600000;
+  return now < until ? until : null;
 }
 /** The one booking that's still ahead or being held, if any. */
 export const liveReservation = (list: Reservation[], now = Date.now()) =>
@@ -418,32 +458,92 @@ export const liveReservation = (list: Reservation[], now = Date.now()) =>
 const shortDate = (t: number) =>
   new Date(t).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false });
 
-/** Cancelling within this long after booking refunds the fee. */
+/** Cancelling within this long after booking (or this long before a slot) refunds the fee, once there is one. */
 export const FREE_CANCEL_MINS = 5;
-export const canRefund = (r: Reservation, now = Date.now()) => now < r.startAt + FREE_CANCEL_MINS * 60000;
+export const LATER_FREE_CANCEL_MINS = 15;
+export const canRefund = (r: Reservation, now = Date.now()) =>
+  r.kind === 'later' ? now < r.startAt - LATER_FREE_CANCEL_MINS * 60000 : now < (r.bookedAt ?? r.startAt) + FREE_CANCEL_MINS * 60000;
 
-/** Holds a connector from now for `holdMins`; the fee comes from the wallet. Returns why it failed, or null. */
-export function reserve(r: Omit<Reservation, 'id' | 'feeINR' | 'status' | 'startAt'>): 'balance' | 'exists' | 'daily' | null {
-  if (liveReservation(state.reservations)) return 'exists';
+const timeLabel = (t: number) => new Date(t).toLocaleTimeString('en-IN', { hour: 'numeric', minute: '2-digit', hour12: true });
+const dayTimeLabel = (t: number) => {
+  const d = new Date(t).setHours(0, 0, 0, 0);
   const today = new Date().setHours(0, 0, 0, 0);
-  if (state.reservations.filter((x) => x.startAt >= today).length >= MAX_RESERVATIONS_PER_DAY) return 'daily';
+  const day = d === today ? 'Today' : d === today + 86400000 ? 'Tomorrow' : new Date(t).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
+  return `${day}, ${timeLabel(t)}`;
+};
+
+/**
+ * Books a connector. Without `startAt` it's held from now for `holdMins`; with a future
+ * `startAt` it's a slot held SLOT_HOLD_MINS from then. Either way GRACE_MINS follow.
+ * Returns why it failed, or null.
+ */
+export function reserve(r: { stationId: string; chargerId: string; connectorId: string; holdMins: number; startAt?: number }): 'balance' | 'exists' | 'daily' | 'paused' | null {
+  const now = Date.now();
+  if (liveReservation(state.reservations, now)) return 'exists';
+  if (bookingPausedUntil(state.reservations, now)) return 'paused';
+  const today = new Date(now).setHours(0, 0, 0, 0);
+  if (state.reservations.filter((x) => (x.bookedAt ?? x.startAt) >= today).length >= MAX_RESERVATIONS_PER_DAY) return 'daily';
   if (state.walletBalance < RESERVATION_FEE) return 'balance';
   const station = STATIONS.find((s) => s.id === r.stationId);
+  const later = r.startAt != null && r.startAt > now;
+  const res: Reservation = {
+    id: `rs${now}`,
+    stationId: r.stationId,
+    chargerId: r.chargerId,
+    connectorId: r.connectorId,
+    startAt: later ? (r.startAt as number) : now,
+    holdMins: later ? SLOT_HOLD_MINS : r.holdMins,
+    feeINR: RESERVATION_FEE,
+    status: 'booked',
+    kind: later ? 'later' : 'now',
+    bookedAt: now,
+  };
+  const name = station?.name ?? 'the station';
+  // what we tell the driver, and when
+  const notes: Omit<InboxItem, 'id' | 'reservationId'>[] = later
+    ? [
+        { title: 'Slot booked', body: `${name}, ${dayTimeLabel(res.startAt)}. We'll remind you 10 minutes before.`, at: now },
+        { title: 'Your slot starts in 10 minutes', body: `Head to ${name}. Your connector is held until ${timeLabel(holdEndsAt(res))}.`, at: res.startAt - 10 * 60000 },
+        { title: 'Plug in within 10 minutes', body: `Your hold at ${name} has ended. After ${timeLabel(releaseAt(res))} the connector is released.`, at: holdEndsAt(res) },
+      ]
+    : [
+        { title: 'Connector reserved', body: `Held for you at ${name} until ${timeLabel(holdEndsAt(res))}, then ${GRACE_MINS} more minutes to plug in.`, at: now },
+        { title: 'Plug in within 10 minutes', body: `Your hold at ${name} has ended. After ${timeLabel(releaseAt(res))} the connector is released.`, at: holdEndsAt(res) },
+      ];
   set({
-    reservations: [{ ...r, id: `rs${Date.now()}`, startAt: Date.now(), feeINR: RESERVATION_FEE, status: 'booked' }, ...state.reservations],
-    walletBalance: +(state.walletBalance - RESERVATION_FEE).toFixed(2),
-    txns: [{ id: `w${Date.now()}`, kind: 'charge', title: `Reservation · ${station?.name ?? ''}`, dateLabel: shortDate(Date.now()), amount: -RESERVATION_FEE }, ...state.txns],
+    reservations: [res, ...state.reservations],
+    inbox: [...notes.map((n, i) => ({ ...n, id: `${res.id}-${i}`, reservationId: res.id })), ...state.inbox],
+    ...(RESERVATION_FEE > 0
+      ? {
+          walletBalance: +(state.walletBalance - RESERVATION_FEE).toFixed(2),
+          txns: [{ id: `w${now}`, kind: 'charge' as const, title: `Reservation · ${name}`, dateLabel: shortDate(now), amount: -RESERVATION_FEE }, ...state.txns],
+        }
+      : {}),
+  });
+  // phone notifications, scheduled in the background
+  void Promise.all(notes.map((n) => remind(n.title, n.body, n.at))).then((ids) => {
+    const reminderIds = ids.filter((x): x is string => !!x);
+    set({ reservations: state.reservations.map((x) => (x.id === res.id ? { ...x, reminderIds } : x)) });
   });
   return null;
 }
 
-/** Cancels a booking; the fee comes back within the first few minutes. */
+/** Stops reminders that haven't fired yet. */
+function endReminders(r: Reservation) {
+  void cancelReminders(r.reminderIds);
+}
+/** Removes a reservation's inbox items that haven't appeared yet. */
+const dropPending = (inbox: InboxItem[], reservationId: string, now = Date.now()) => inbox.filter((n) => n.reservationId !== reservationId || n.at <= now);
+
+/** Cancels a booking; any fee comes back inside the free-cancel window. */
 export function cancelReservation(id: string) {
   const r = state.reservations.find((x) => x.id === id);
   if (!r) return;
-  const refund = canRefund(r);
+  const refund = r.feeINR > 0 && canRefund(r);
+  endReminders(r);
   set({
     reservations: state.reservations.map((x) => (x.id === id ? { ...x, status: 'cancelled' as const } : x)),
+    inbox: dropPending(state.inbox, id),
     ...(refund
       ? {
           walletBalance: +(state.walletBalance + r.feeINR).toFixed(2),

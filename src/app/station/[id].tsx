@@ -23,7 +23,7 @@ import StartSheet from '@/components/start-sheet';
 import VoltButton from '@/components/volt-button';
 import { s, scaledSheet, useAppWidth } from '@/constants/responsive';
 import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
-import { MAX_RESERVATIONS_PER_DAY, RESERVATION_FEE, liveReservation, reserve, startSession, submitReview, toggleFavourite, useAppStore } from '@/data/app-store';
+import { MAX_RESERVATIONS_PER_DAY, NO_SHOW_LIMIT, NO_SHOW_PAUSE_HOURS, RESERVATION_FEE, liveReservation, reserve, startSession, submitReview, toggleFavourite, useAppStore } from '@/data/app-store';
 import { CONNECTORS } from '@/data/connectors';
 import {
   STATIONS,
@@ -144,11 +144,12 @@ export default function StationDetail() {
     setPicked(null);
     router.navigate('/sessions');
   };
-  const book = (holdMins: number) => {
+  const book = (holdMins: number, startAt?: number) => {
     if (!picked) return;
-    const why = reserve({ stationId: station.id, chargerId: picked.charger.id, connectorId: picked.connector.id, holdMins });
+    const why = reserve({ stationId: station.id, chargerId: picked.charger.id, connectorId: picked.connector.id, holdMins, startAt });
     if (why === 'exists') return setSheetError('You already have a reservation. Cancel it in Account → Reservations first.');
     if (why === 'daily') return setSheetError(`You can make up to ${MAX_RESERVATIONS_PER_DAY} reservations a day. Try again tomorrow.`);
+    if (why === 'paused') return setSheetError(`Booking is paused for ${NO_SHOW_PAUSE_HOURS} hours after ${NO_SHOW_LIMIT} missed reservations.`);
     if (why === 'balance') return setSheetError(`Add at least ₹${RESERVATION_FEE} to your wallet to reserve.`);
     setPicked(null);
     router.push('/reservations' as never);
@@ -264,6 +265,7 @@ export default function StationDetail() {
           charger={picked.charger}
           connector={picked.connector}
           canStart={!session}
+          etaMins={Math.max(1, Math.round((km / 25) * 60))}
           error={sheetError}
           onStart={start}
           onReserve={book}

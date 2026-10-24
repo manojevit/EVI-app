@@ -3,7 +3,8 @@ import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
 
 import AppHeader from '@/components/app-header';
 import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
-import { markNotificationsRead, useAppStore } from '@/data/app-store';
+import { markNotificationsRead, useAppStore, type InboxItem } from '@/data/app-store';
+import { useNow } from '@/hooks/use-now';
 import { NOTIFICATIONS, type AppNotification, type NotificationKind } from '@/data/mock';
 import { scaledSheet } from '@/constants/responsive';
 
@@ -15,13 +16,34 @@ const KIND: Record<NotificationKind, { icon: keyof typeof Ionicons.glyphMap; tin
   ticket: { icon: 'chatbubble-ellipses', tint: Palette.amberSoft, ink: Palette.amberDeep },
   station: { icon: 'location', tint: '#E3F4F3', ink: '#1C7A74' },
   offer: { icon: 'pricetag', tint: '#EFEAFB', ink: '#5B45A8' },
+  reservation: { icon: 'calendar', tint: Palette.voltSoft, ink: Palette.forest },
 };
+
+/** A reservation update from the app, shaped like the sample alerts. */
+function fromInbox(n: InboxItem, now: number): AppNotification {
+  const day = new Date(n.at).setHours(0, 0, 0, 0);
+  const today = new Date(now).setHours(0, 0, 0, 0);
+  const mins = Math.round((now - n.at) / 60000);
+  const timeAgo =
+    mins < 1 ? 'Just now' : mins < 60 ? `${mins} min ago` : day === today ? `${Math.round(mins / 60)} h ago` : new Date(n.at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+  return { id: n.id, kind: 'reservation', title: n.title, body: n.body, timeAgo, group: day === today ? 'Today' : day === today - 86400000 ? 'Yesterday' : 'Earlier', unread: true };
+}
 const GROUPS: AppNotification['group'][] = ['Today', 'Yesterday', 'Earlier'];
 
 export default function NotificationsScreen() {
+  const now = useNow(30000);
   const read = useAppStore((st) => st.readNotifications);
+  const inbox = useAppStore((st) => st.inbox);
+  // reservation updates appear once their time comes, newest first, above the rest
+  const all = [
+    ...inbox
+      .filter((n) => n.at <= now)
+      .sort((a, b) => b.at - a.at)
+      .map((n) => fromInbox(n, now)),
+    ...NOTIFICATIONS,
+  ];
   const isUnread = (n: AppNotification) => !!n.unread && !read.includes(n.id);
-  const unread = NOTIFICATIONS.filter(isUnread);
+  const unread = all.filter(isUnread);
 
   return (
     <View style={styles.container}>
@@ -40,7 +62,7 @@ export default function NotificationsScreen() {
           ) : null}
         </View>
         {GROUPS.map((g) => {
-          const items = NOTIFICATIONS.filter((n) => n.group === g);
+          const items = all.filter((n) => n.group === g);
           if (!items.length) return null;
           return (
             <View key={g} style={styles.section}>

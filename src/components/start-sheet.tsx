@@ -1,27 +1,56 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useState, type ReactNode } from 'react';
-import { Modal, Pressable, Text, TouchableOpacity, View } from 'react-native';
+import { Modal, Pressable, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import ConnectorIcon from '@/components/connector-icon';
 import { APP_MAX_WIDTH, scaledSheet } from '@/constants/responsive';
 import { Font, Palette, Radius, Spacing } from '@/constants/theme';
-import { DEFAULT_HOLD_MINS, FREE_CANCEL_MINS, HOLD_OPTIONS, MAX_RESERVATIONS_PER_DAY, RESERVATION_FEE, TIME_OPTIONS } from '@/data/app-store';
+import {
+  GRACE_MINS,
+  HOLD_OPTIONS,
+  MAX_RESERVATIONS_PER_DAY,
+  NO_SHOW_LIMIT,
+  NO_SHOW_PAUSE_HOURS,
+  RESERVATION_FEE,
+  SLOT_DAYS_AHEAD,
+  SLOT_HOLD_MINS,
+  TIME_OPTIONS,
+} from '@/data/app-store';
 import { CONNECTORS } from '@/data/connectors';
 import type { Charger, Connector, Station } from '@/data/mock';
-import { clock } from '@/data/reservation-helpers';
+import { clock, dayLabel } from '@/data/reservation-helpers';
 
 type Mode = 'time' | 'full';
 
+// bookable slots: every 30 minutes from 6 am to 10:30 pm, at least 30 minutes from now
+const DAY = 86400000;
+const startOfDay = (t: number) => new Date(t).setHours(0, 0, 0, 0);
+function slotsFor(day: number, now: number) {
+  const out: number[] = [];
+  for (let m = 6 * 60; m <= 22 * 60 + 30; m += 30) {
+    const t = day + m * 60000;
+    if (t >= now + 30 * 60000) out.push(t);
+  }
+  return out;
+}
+const dayChip = (day: number, now: number) => {
+  const label = dayLabel(day, now);
+  return label === 'Today' || label === 'Tomorrow' ? label : new Date(day).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric' });
+};
+/** Suggested hold: enough to drive over plus a few minutes, from the options. */
+const suggestHold = (eta: number) => HOLD_OPTIONS.find((o) => o >= eta + 5) ?? HOLD_OPTIONS[HOLD_OPTIONS.length - 1];
+
 /**
  * Opens when a connector's Start is tapped: charge for a set time or until full.
- * "Reserve now" switches the sheet to a reservation view (hold it for 10–30 min).
+ * "Reserve now" switches the sheet to a reservation view: hold it from now (10–30 min) or book a slot.
  */
 export default function StartSheet({
   station,
   charger,
   connector,
   canStart,
+  etaMins,
   error,
   onStart,
   onReserve,
@@ -32,22 +61,37 @@ export default function StartSheet({
   connector: Connector;
   /** false while another charge is running */
   canStart: boolean;
+  /** rough drive time to the station, for the suggested hold */
+  etaMins: number;
   error: string | null;
   onStart: (limitMins: number | null) => void;
-  onReserve: (holdMins: number) => void;
+  /** without startAt: hold from now; with it: a slot booked for later */
+  onReserve: (holdMins: number, startAt?: number) => void;
   onClose: () => void;
 }) {
   const insets = useSafeAreaInsets();
   const [view, setView] = useState<'start' | 'reserve'>('start');
   const [mode, setMode] = useState<Mode>('time');
   const [mins, setMins] = useState<number>(30);
-  const [hold, setHold] = useState<number>(DEFAULT_HOLD_MINS);
+  const tooFar = etaMins > HOLD_OPTIONS[HOLD_OPTIONS.length - 1] - 5;
+  const [hold, setHold] = useState<number>(suggestHold(etaMins));
+  const [when, setWhen] = useState<'now' | 'later'>(tooFar ? 'later' : 'now');
+  const now = Date.now();
+  const days = Array.from({ length: SLOT_DAYS_AHEAD }, (_, i) => startOfDay(now) + i * DAY).filter((d) => slotsFor(d, now).length);
+  const [day, setDay] = useState<number>(days[0]);
+  const slots = slotsFor(day, now);
+  const [slot, setSlot] = useState<number | null>(slots[0] ?? null);
   const label = CONNECTORS[connector.type].label;
 
   const openReserve = () => {
-    setHold(DEFAULT_HOLD_MINS);
+    setHold(suggestHold(etaMins));
     setView('reserve');
   };
+  const pickDay = (d: number) => {
+    setDay(d);
+    setSlot(slotsFor(d, Date.now())[0] ?? null);
+  };
+  const confirm = () => (when === 'now' ? onReserve(hold) : slot != null ? onReserve(SLOT_HOLD_MINS, slot) : undefined);
 
   return (
     <Modal visible transparent animationType="slide" statusBarTranslucent onRequestClose={view === 'reserve' ? () => setView('start') : onClose}>
@@ -148,26 +192,92 @@ export default function StartSheet({
                 </View>
               </View>
 
-              <Text style={styles.section}>Hold it for</Text>
-              <MinuteChips options={HOLD_OPTIONS} value={hold} onChange={setHold} />
-
-              <View style={styles.holdBox}>
-                <Ionicons name="time-outline" size={20} color={Palette.forest} />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.holdMain}>Held for you until {clock(Date.now() + hold * 60000)}</Text>
-                  <Text style={styles.holdSub}>Not plugged in by then? It&apos;s released for other drivers.</Text>
-                </View>
+              {/* now | later */}
+              <View style={styles.tabs} accessibilityRole="tablist">
+                {(
+                  [
+                    ['now', 'Now', 'flash-outline'],
+                    ['later', 'Later', 'calendar-outline'],
+                  ] as const
+                ).map(([m, text, icon]) => (
+                  <TouchableOpacity
+                    key={m}
+                    onPress={() => setWhen(m)}
+                    activeOpacity={0.85}
+                    style={[styles.tab, when === m && styles.tabOn]}
+                    accessibilityRole="tab"
+                    accessibilityState={{ selected: when === m }}>
+                    <Ionicons name={icon} size={15} color={when === m ? Palette.forest : Palette.mist} />
+                    <Text style={[styles.tabText, when === m && styles.tabTextOn]}>{text}</Text>
+                  </TouchableOpacity>
+                ))}
               </View>
+
+              {when === 'now' ? (
+                <>
+                  <Text style={styles.suggest}>
+                    <Ionicons name="car-outline" size={13} color={Palette.forest} />{' '}
+                    {tooFar
+                      ? `You're about ${etaMins} min away. Holds last up to ${HOLD_OPTIONS[HOLD_OPTIONS.length - 1]} min, so a Later slot may suit you better.`
+                      : `You're about ${etaMins} min away, so we suggest ${suggestHold(etaMins)} min.`}
+                  </Text>
+                  <MinuteChips options={HOLD_OPTIONS} value={hold} onChange={setHold} />
+                  <View style={styles.holdBox}>
+                    <Ionicons name="time-outline" size={20} color={Palette.forest} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.holdMain}>Held for you until {clock(now + hold * 60000)}</Text>
+                      <Text style={styles.holdSub}>Then {GRACE_MINS} more minutes to plug in before it&apos;s released.</Text>
+                    </View>
+                  </View>
+                </>
+              ) : (
+                <>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.slotRow}>
+                    {days.map((d) => (
+                      <TouchableOpacity key={d} onPress={() => pickDay(d)} activeOpacity={0.85} style={[styles.slotChip, day === d && styles.slotChipOn]}>
+                        <Text style={[styles.slotText, day === d && styles.slotTextOn]}>{dayChip(d, now)}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.slotRow}>
+                    {slots.map((t) => (
+                      <TouchableOpacity key={t} onPress={() => setSlot(t)} activeOpacity={0.85} style={[styles.slotChip, slot === t && styles.slotChipOn]}>
+                        <Text style={[styles.slotText, slot === t && styles.slotTextOn]}>{clock(t)}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                  {slot != null ? (
+                    <View style={styles.holdBox}>
+                      <Ionicons name="calendar-outline" size={20} color={Palette.forest} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.holdMain}>
+                          {dayLabel(slot, now)}, {clock(slot)}
+                        </Text>
+                        <Text style={styles.holdSub}>
+                          Held until {clock(slot + SLOT_HOLD_MINS * 60000)}, then {GRACE_MINS} more minutes to plug in.
+                        </Text>
+                      </View>
+                    </View>
+                  ) : null}
+                </>
+              )}
 
               <View style={styles.rules}>
-                <Rule icon="wallet-outline">₹{RESERVATION_FEE} booking fee, paid from your wallet</Rule>
-                <Rule icon="arrow-undo-outline">Cancel within {FREE_CANCEL_MINS} min for a full refund</Rule>
-                <Rule icon="calendar-clear-outline">One at a time, up to {MAX_RESERVATIONS_PER_DAY} a day</Rule>
+                {RESERVATION_FEE > 0 ? <Rule icon="wallet-outline">₹{RESERVATION_FEE} booking fee, paid from your wallet</Rule> : null}
+                <Rule icon="notifications-outline">
+                  {when === 'later' ? "We'll remind you 10 min before, and before it's released" : "We'll notify you before it's released"}
+                </Rule>
+                <Rule icon="close-circle-outline">Cancel any time in Account → Reservations</Rule>
+                <Rule icon="calendar-clear-outline">
+                  One at a time, up to {MAX_RESERVATIONS_PER_DAY} a day. {NO_SHOW_LIMIT} missed bookings pause booking for {NO_SHOW_PAUSE_HOURS} h
+                </Rule>
               </View>
 
-              <TouchableOpacity style={styles.startBtn} activeOpacity={0.88} onPress={() => onReserve(hold)}>
+              <TouchableOpacity style={[styles.startBtn, when === 'later' && slot == null && styles.startOff]} activeOpacity={0.88} disabled={when === 'later' && slot == null} onPress={confirm}>
                 <Ionicons name="calendar" size={16} color={Palette.white} />
-                <Text style={styles.startText}>Confirm reservation · {hold} min</Text>
+                <Text style={styles.startText}>
+                  {when === 'now' ? `Confirm · hold ${hold} min` : slot != null ? `Confirm · ${dayLabel(slot, now)} ${clock(slot)}` : 'Pick a time'}
+                </Text>
               </TouchableOpacity>
             </>
           )}
@@ -254,5 +364,11 @@ const styles = scaledSheet({
   rules: { gap: 6, paddingHorizontal: 2 },
   rule: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   ruleText: { flex: 1, fontFamily: Font.regular, fontSize: 12, color: Palette.inkSoft },
+  suggest: { fontFamily: Font.medium, fontSize: 12, color: Palette.forest },
+  slotRow: { gap: 6, paddingRight: 4 },
+  slotChip: { height: 34, paddingHorizontal: 12, borderRadius: 17, borderWidth: 1.5, borderColor: Palette.line, backgroundColor: Palette.surface, alignItems: 'center', justifyContent: 'center' },
+  slotChipOn: { backgroundColor: Palette.forest, borderColor: Palette.forest },
+  slotText: { fontFamily: Font.semibold, fontSize: 13, color: Palette.inkSoft },
+  slotTextOn: { color: Palette.white },
   error: { fontFamily: Font.medium, fontSize: 12, color: Palette.red, textAlign: 'center' },
 });

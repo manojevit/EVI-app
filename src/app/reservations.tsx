@@ -12,12 +12,18 @@ import VoltButton from '@/components/volt-button';
 import { scaledSheet } from '@/constants/responsive';
 import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
 import {
-  FREE_CANCEL_MINS,
+  GRACE_MINS,
   MAX_RESERVATIONS_PER_DAY,
+  NO_SHOW_LIMIT,
+  NO_SHOW_PAUSE_HOURS,
   RESERVATION_FEE,
+  SLOT_DAYS_AHEAD,
   canRefund,
   cancelReservation,
+  holdEndsAt,
+  inGrace,
   liveReservation,
+  releaseAt,
   reservationState,
   useAppStore,
   type Reservation,
@@ -25,7 +31,7 @@ import {
 } from '@/data/app-store';
 import { CONNECTORS } from '@/data/connectors';
 import { directionsUrl } from '@/data/mock';
-import { MIN, clock, dayLabel, inWords, reservationParts } from '@/data/reservation-helpers';
+import { clock, dayLabel, inWords, reservationParts } from '@/data/reservation-helpers';
 import { stationPhotos } from '@/data/station-photos';
 import { useNow } from '@/hooks/use-now';
 
@@ -62,16 +68,16 @@ export default function ReservationsScreen() {
               <Ionicons name="calendar-outline" size={28} color={Palette.forest} />
             </View>
             <Text style={styles.emptyTitle}>No reservation right now</Text>
-            <Text style={styles.emptyText}>Open a station, tap Start on a free connector, then Reserve now. We hold it for you for 10 to 30 minutes.</Text>
+            <Text style={styles.emptyText}>Open a station, tap Start on a free connector, then Reserve now. Hold it for up to 30 minutes, or book a time up to {SLOT_DAYS_AHEAD} days ahead.</Text>
             <VoltButton label="Find a charger" icon="map-outline" onPress={() => router.navigate('/map')} style={{ alignSelf: 'stretch', marginTop: Spacing.lg }} />
           </View>
         )}
 
         <View style={styles.rules}>
-          <Rule icon="wallet-outline" text={`₹${RESERVATION_FEE} per booking, paid from your wallet.`} />
-          <Rule icon="arrow-undo-outline" text={`Cancel within ${FREE_CANCEL_MINS} minutes of booking and you get it back.`} />
-          <Rule icon="time-outline" text="Not plugged in when the hold ends? The connector is released and the fee isn't refunded." />
-          <Rule icon="calendar-clear-outline" text={`One reservation at a time, up to ${MAX_RESERVATIONS_PER_DAY} a day.`} />
+          {RESERVATION_FEE > 0 ? <Rule icon="wallet-outline" text={`₹${RESERVATION_FEE} per booking, paid from your wallet.`} /> : null}
+          <Rule icon="time-outline" text={`After your hold ends you get ${GRACE_MINS} more minutes to plug in, then the connector is released.`} />
+          <Rule icon="notifications-outline" text="We notify you when it's booked, 10 minutes before a booked time, and before it's released." />
+          <Rule icon="calendar-clear-outline" text={`One at a time, up to ${MAX_RESERVATIONS_PER_DAY} a day. ${NO_SHOW_LIMIT} missed reservations pause booking for ${NO_SHOW_PAUSE_HOURS} hours.`} />
         </View>
 
         {past.length ? (
@@ -91,9 +97,11 @@ export default function ReservationsScreen() {
         icon="close-circle-outline"
         title="Cancel reservation?"
         message={
-          live && canRefund(live, now)
-            ? `The connector is released and ₹${live.feeINR} goes back to your wallet.`
-            : `It's been more than ${FREE_CANCEL_MINS} minutes since you booked, so the fee is not refunded.`
+          !live || live.feeINR === 0
+            ? 'The connector is released for other drivers and your reminders are cancelled.'
+            : canRefund(live, now)
+              ? `The connector is released and ₹${live.feeINR} goes back to your wallet.`
+              : 'The free-cancel time has passed, so the fee is not refunded.'
         }
         confirmLabel="Yes, cancel"
         cancelLabel="Keep it"
@@ -113,7 +121,8 @@ function LiveCard({ r, now, onCancel }: { r: Reservation; now: number; onCancel:
   if (!parts) return null;
   const { station, charger, connector } = parts;
   const st = reservationState(r, now);
-  const end = r.startAt + r.holdMins * MIN;
+  const end = holdEndsAt(r);
+  const grace = inGrace(r, now);
   const photo = stationPhotos(station.id)[0]?.source;
 
   return (
@@ -121,9 +130,11 @@ function LiveCard({ r, now, onCancel }: { r: Reservation; now: number; onCancel:
       <View style={styles.liveTop}>
         <View style={styles.statusPill}>
           <View style={styles.statusDot} />
-          <Text style={styles.statusText}>{STATE_LOOK[st].label}</Text>
+          <Text style={styles.statusText}>{grace ? 'Grace period' : STATE_LOOK[st].label}</Text>
         </View>
-        <Text style={styles.countdown}>{st === 'upcoming' ? `Starts in ${inWords(r.startAt - now)}` : `${inWords(end - now)} left`}</Text>
+        <Text style={[styles.countdown, grace && { color: Palette.amberDeep }]}>
+          {st === 'upcoming' ? `Starts in ${inWords(r.startAt - now)}` : grace ? `${inWords(releaseAt(r) - now)} to plug in` : `${inWords(end - now)} left`}
+        </Text>
       </View>
 
       <TouchableOpacity style={styles.stationRow} activeOpacity={0.8} onPress={() => router.push({ pathname: '/station/[id]', params: { id: station.id } })}>
@@ -155,9 +166,11 @@ function LiveCard({ r, now, onCancel }: { r: Reservation; now: number; onCancel:
             <Ionicons name="time-outline" size={18} color={Palette.forest} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.factMain}>Held until {clock(end)}</Text>
+            <Text style={styles.factMain}>
+              {r.kind === 'later' ? `${dayLabel(r.startAt, now)}, ${clock(r.startAt)} – ${clock(end)}` : `Held until ${clock(end)}`}
+            </Text>
             <Text style={styles.factSub}>
-              Booked at {clock(r.startAt)} · {r.holdMins} min hold
+              Then {GRACE_MINS} min grace to plug in, until {clock(releaseAt(r))}
             </Text>
           </View>
         </View>

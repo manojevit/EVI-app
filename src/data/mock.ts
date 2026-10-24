@@ -356,7 +356,7 @@ export const ALL_CHARGER_IDS = STATIONS.flatMap((s) => s.chargers.map((ch) => ch
 export const directionsUrl = (s: Station) =>
   `https://www.google.com/maps/dir/?api=1&destination=${s.latitude},${s.longitude}`;
 
-export type NotificationKind = 'charge' | 'wallet' | 'ticket' | 'station' | 'offer' | 'charger';
+export type NotificationKind = 'charge' | 'wallet' | 'ticket' | 'station' | 'offer' | 'charger' | 'reservation';
 export interface AppNotification {
   id: string;
   kind: NotificationKind;

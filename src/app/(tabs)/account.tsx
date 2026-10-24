@@ -11,7 +11,7 @@ import { scaledSheet } from '@/constants/responsive';
 import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
 import { liveReservation, setFilters, useAppStore } from '@/data/app-store';
 import { ACCOUNT, formatINR } from '@/data/mock';
-import { MIN, clock } from '@/data/reservation-helpers';
+import { MIN, clock, dayLabel } from '@/data/reservation-helpers';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 type Item = { icon: IconName; title: string; hint: string; route: string; badge?: string };
@@ -40,7 +40,7 @@ export default function AccountScreen() {
       {
         icon: 'calendar-outline',
         title: 'Reservations',
-        hint: booked ? `Held until ${clock(booked.startAt + booked.holdMins * MIN)}` : 'Hold a charger before you arrive',
+        hint: booked ? (booked.kind === 'later' && booked.startAt > Date.now() ? `Booked for ${dayLabel(booked.startAt)}, ${clock(booked.startAt)}` : `Held until ${clock(booked.startAt + booked.holdMins * MIN)}`) : 'Hold a charger or book a time',
         route: '/reservations',
         badge: booked ? '1 active' : undefined,
       },
