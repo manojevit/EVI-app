@@ -13,7 +13,6 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  useWindowDimensions,
 } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
@@ -22,7 +21,7 @@ import AppHeader from '@/components/app-header';
 import ConnectorIcon from '@/components/connector-icon';
 import StartSheet from '@/components/start-sheet';
 import VoltButton from '@/components/volt-button';
-import { s, scaledSheet } from '@/constants/responsive';
+import { s, scaledSheet, useAppWidth } from '@/constants/responsive';
 import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
 import { RESERVATION_FEE, liveReservation, reserve, startSession, submitReview, toggleFavourite, useAppStore } from '@/data/app-store';
 import { CONNECTORS, type ConnectorKey } from '@/data/connectors';
@@ -68,7 +67,7 @@ const kmLabel = (km: number) => `${km < 10 ? km.toFixed(1) : Math.round(km)} km`
 export default function StationDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { width, height } = useWindowDimensions();
+  const { width, height } = useAppWidth();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const scrollRef = useRef<any>(null);
   const tabsY = useRef(0);
@@ -466,7 +465,7 @@ function InfoTab({
         <InfoRow icon="flash-outline" label="Connectors" last>
           <View style={styles.typeIcons}>
             {types.map((k) => (
-              <ConnectorIcon key={k} type={k} size={24} original />
+              <ConnectorIcon key={k} type={k} size={s(21)} original />
             ))}
           </View>
         </InfoRow>
@@ -815,7 +814,7 @@ const styles = scaledSheet({
   infoRight: { flex: 1, alignItems: 'flex-end' },
   infoValue: { fontFamily: Font.semibold, fontSize: 14, color: Palette.ink, textAlign: 'right' },
   infoNote: { fontFamily: Font.regular, fontSize: 12, color: Palette.mist, marginTop: 2 },
-  typeIcons: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 8 },
+  typeIcons: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 5 },
   reportRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingHorizontal: Spacing.xs, paddingVertical: Spacing.sm },
   reportText: { flex: 1, fontFamily: Font.semibold, fontSize: 14, color: Palette.red },
 

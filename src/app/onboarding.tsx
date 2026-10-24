@@ -3,7 +3,7 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import { Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, {
   cancelAnimation,
   Easing,
@@ -26,7 +26,7 @@ import Svg, { Circle } from 'react-native-svg';
 
 import BrandLogo from '@/components/brand-logo';
 import LiveMap from '@/components/live-map';
-import { fs } from '@/constants/responsive';
+import { fs, useAppWidth } from '@/constants/responsive';
 import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
 import { finishOnboarding } from '@/data/app-store';
 import { STATIONS } from '@/data/mock';
@@ -279,7 +279,7 @@ function Progress({ i, scrollX, width }: { i: number; scrollX: SharedValue<numbe
 export default function OnboardingScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { width, height } = useWindowDimensions();
+  const { width, height } = useAppWidth();
   const scrollRef = useAnimatedRef<Animated.ScrollView>();
   const scrollX = useSharedValue(0);
   const [index, setIndex] = useState(0);

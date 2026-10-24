@@ -4,9 +4,9 @@ import { Modal, Pressable, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import ConnectorIcon from '@/components/connector-icon';
-import { scaledSheet } from '@/constants/responsive';
+import { APP_MAX_WIDTH, scaledSheet } from '@/constants/responsive';
 import { Font, Palette, Radius, Spacing } from '@/constants/theme';
-import { FREE_CANCEL_MINS, RESERVATION_FEE, TIME_OPTIONS, chargeEstimate } from '@/data/app-store';
+import { FREE_CANCEL_MINS, TIME_OPTIONS, chargeEstimate } from '@/data/app-store';
 import { CONNECTORS } from '@/data/connectors';
 import type { Charger, Connector, Station } from '@/data/mock';
 import { clock } from '@/data/reservation-helpers';
@@ -51,7 +51,7 @@ export default function StartSheet({
     <Modal visible transparent animationType="slide" statusBarTranslucent onRequestClose={onClose}>
       <View style={styles.overlay}>
         <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Close" />
-        <View style={[styles.sheet, { paddingBottom: insets.bottom + Spacing.lg }]}>
+        <View style={[styles.sheet, { maxWidth: APP_MAX_WIDTH, paddingBottom: insets.bottom + Spacing.lg }]}>
           <View style={styles.grabber} />
 
           {/* what you're about to use */}
@@ -134,9 +134,7 @@ export default function StartSheet({
           </View>
           <TouchableOpacity style={styles.reserveBtn} activeOpacity={0.85} onPress={() => onReserve(hold)}>
             <Ionicons name="calendar-outline" size={16} color={Palette.forest} />
-            <Text style={styles.reserveText}>
-              Reserve for {hold} min · ₹{RESERVATION_FEE}
-            </Text>
+            <Text style={styles.reserveText}>Reserve for {hold} min</Text>
           </TouchableOpacity>
           <Text style={styles.reserveNote}>
             We hold this connector for you until {clock(now + hold * 60000)}. Cancel within {FREE_CANCEL_MINS} min for a full refund.
@@ -160,9 +158,9 @@ function Estimate({ label, value }: { label: string; value: string }) {
 }
 
 const styles = scaledSheet({
-  overlay: { flex: 1, justifyContent: 'flex-end' },
+  overlay: { flex: 1, justifyContent: 'flex-end', alignItems: 'center' },
   backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(8,24,15,0.5)' },
-  sheet: { backgroundColor: Palette.canvas, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: Spacing.lg, paddingTop: Spacing.sm, gap: 10 },
+  sheet: { width: '100%', backgroundColor: Palette.canvas, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: Spacing.lg, paddingTop: Spacing.sm, gap: 10 },
   grabber: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: Palette.line, marginBottom: 2 },
 
   head: { flexDirection: 'row', alignItems: 'center', gap: 10 },

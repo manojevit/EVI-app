@@ -1,12 +1,12 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { FlatList, ScrollView, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import { FlatList, ScrollView, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import LiveMap, { type LiveMapHandle } from '@/components/live-map';
 import StationCard from '@/components/station-card';
-import { s, scaledSheet } from '@/constants/responsive';
+import { s, scaledSheet, useAppWidth } from '@/constants/responsive';
 import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
 import { activeFilterCount, setFilters, stationMatches, useAppStore } from '@/data/app-store';
 import { STATIONS, distanceKm, freeConnectorCount, maxPowerKw, stationExtras, type Station } from '@/data/mock';
@@ -22,7 +22,7 @@ const CARD_H = 78; // swipe card height incl. border (before scaling)
 export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
+  const { width } = useAppWidth();
   const location = useUserLocation();
   const balance = useAppStore((st) => st.walletBalance);
   const filters = useAppStore((st) => st.filters);

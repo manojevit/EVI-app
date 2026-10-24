@@ -48,11 +48,12 @@ export default function StationCard({
           </Text>
           <View style={styles.statusRow}>
             <View style={[styles.dot, { backgroundColor: !open ? Palette.red : free ? Palette.volt : Palette.amber }]} />
-            <Text style={[styles.status, { color: tone }]} numberOfLines={1}>
+            {/* free count always shows in full; the kW gives way on narrow phones */}
+            <Text style={[styles.status, { color: tone, flexShrink: 0 }]} numberOfLines={1}>
               {status}
             </Text>
             <Text style={styles.sep}>·</Text>
-            <Text style={styles.speed} numberOfLines={1}>
+            <Text style={[styles.speed, { flexShrink: 1 }]} numberOfLines={1}>
               {maxPowerKw(station)} kW {dc ? 'DC' : 'AC'}
             </Text>
           </View>

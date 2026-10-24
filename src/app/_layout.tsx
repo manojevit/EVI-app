@@ -9,11 +9,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { Stack, router, type ErrorBoundaryProps } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect } from 'react';
-import { Text, TouchableOpacity, View } from 'react-native';
+import { useEffect, type ReactNode } from 'react';
+import { Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { APP_MAX_WIDTH } from '@/constants/responsive';
 import { Palette, Radius, Spacing } from '@/constants/theme';
 
 SplashScreen.preventAutoHideAsync();
@@ -21,6 +22,22 @@ SplashScreen.preventAutoHideAsync();
 export const unstable_settings = {
   initialRouteName: 'index', // launch animation → onboarding → login
 };
+
+/**
+ * On tablets and wide windows the app sits in a centred phone-width column, so cards and
+ * text keep their proportions instead of stretching edge to edge.
+ */
+function AppFrame({ children }: { children: ReactNode }) {
+  const { width } = useWindowDimensions();
+  if (width <= APP_MAX_WIDTH) return <>{children}</>;
+  return (
+    <View style={{ flex: 1, alignItems: 'center', backgroundColor: Palette.canvasDeep }}>
+      <View style={{ flex: 1, width: APP_MAX_WIDTH, overflow: 'hidden', backgroundColor: Palette.canvas, borderLeftWidth: 1, borderRightWidth: 1, borderColor: Palette.line }}>
+        {children}
+      </View>
+    </View>
+  );
+}
 
 /** If a screen ever crashes, show a way back instead of a blank app. */
 export function ErrorBoundary({ retry }: ErrorBoundaryProps) {
@@ -60,32 +77,34 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
         <StatusBar style="dark" />
-        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: Palette.canvas } }}>
-          <Stack.Screen name="index" options={{ animation: 'none' }} />
-          <Stack.Screen name="onboarding" options={{ animation: 'fade' }} />
-          <Stack.Screen name="login" options={{ animation: 'fade' }} />
-          <Stack.Screen name="otp" />
-          <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="station/[id]" />
-          <Stack.Screen name="notifications" />
-          <Stack.Screen name="history" />
-          <Stack.Screen name="profile" />
-          <Stack.Screen name="vehicles" />
-          <Stack.Screen name="plans" />
-          <Stack.Screen name="help" />
-          <Stack.Screen name="tickets" />
-          <Stack.Screen name="ticket/[id]" />
-          <Stack.Screen name="new-ticket" />
-          <Stack.Screen name="receipt/[id]" />
-          <Stack.Screen name="settings" />
-          <Stack.Screen name="wallet" />
-          <Stack.Screen name="reservations" />
-          <Stack.Screen name="rfid" />
-          <Stack.Screen name="add-rfid" options={{ presentation: 'transparentModal', animation: 'slide_from_bottom' }} />
-          <Stack.Screen name="scan" />
-          <Stack.Screen name="filters" options={{ presentation: 'transparentModal', animation: 'fade' }} />
-          <Stack.Screen name="add-vehicle" options={{ presentation: 'transparentModal', animation: 'slide_from_bottom' }} />
-        </Stack>
+        <AppFrame>
+          <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: Palette.canvas } }}>
+            <Stack.Screen name="index" options={{ animation: 'none' }} />
+            <Stack.Screen name="onboarding" options={{ animation: 'fade' }} />
+            <Stack.Screen name="login" options={{ animation: 'fade' }} />
+            <Stack.Screen name="otp" />
+            <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="station/[id]" />
+            <Stack.Screen name="notifications" />
+            <Stack.Screen name="history" />
+            <Stack.Screen name="profile" />
+            <Stack.Screen name="vehicles" />
+            <Stack.Screen name="plans" />
+            <Stack.Screen name="help" />
+            <Stack.Screen name="tickets" />
+            <Stack.Screen name="ticket/[id]" />
+            <Stack.Screen name="new-ticket" />
+            <Stack.Screen name="receipt/[id]" />
+            <Stack.Screen name="settings" />
+            <Stack.Screen name="wallet" />
+            <Stack.Screen name="reservations" />
+            <Stack.Screen name="rfid" />
+            <Stack.Screen name="add-rfid" options={{ presentation: 'transparentModal', animation: 'slide_from_bottom' }} />
+            <Stack.Screen name="scan" />
+            <Stack.Screen name="filters" options={{ presentation: 'transparentModal', animation: 'fade' }} />
+            <Stack.Screen name="add-vehicle" options={{ presentation: 'transparentModal', animation: 'slide_from_bottom' }} />
+          </Stack>
+        </AppFrame>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );

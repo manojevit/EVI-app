@@ -1,6 +1,6 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { useEffect } from 'react';
-import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   cancelAnimation,
   Easing,
@@ -20,6 +20,7 @@ import Animated, {
 import Svg, { Circle, Defs, LinearGradient as SvgGradient, Path, RadialGradient, Stop } from 'react-native-svg';
 
 import BrandLogo, { BrandLogoFull } from '@/components/brand-logo';
+import { useAppWidth } from '@/constants/responsive';
 import { Font, Palette } from '@/constants/theme';
 
 /**
@@ -246,7 +247,7 @@ function TaglineWord({ word, i, tagline }: { word: string; i: number; tagline: S
 
 export default function ChargeUpIntro({ onDone }: { onDone: () => void }) {
   const reduceMotion = useReducedMotion();
-  const { width, height } = useWindowDimensions();
+  const { width, height } = useAppWidth();
   const floodD = Math.hypot(width, height) * 1.05;
 
   const logoA = useSharedValue(0); // splash logo: 0 = resting, 1 = gone

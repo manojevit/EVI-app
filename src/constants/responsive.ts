@@ -1,4 +1,4 @@
-import { Dimensions, PixelRatio, StyleSheet } from 'react-native';
+import { Dimensions, PixelRatio, StyleSheet, useWindowDimensions } from 'react-native';
 
 /**
  * Responsive sizing.
@@ -10,6 +10,11 @@ import { Dimensions, PixelRatio, StyleSheet } from 'react-native';
  */
 const BASE_WIDTH = 390;
 const MAX_FONT_MULTIPLIER = 1.15;
+/**
+ * Widest the app gets. On tablets (and wide browser windows) the app sits in a centred
+ * column this wide instead of stretching cards and text across the whole screen.
+ */
+export const APP_MAX_WIDTH = 520;
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi);
 
@@ -17,7 +22,13 @@ const { width } = Dimensions.get('window');
 const fontScale = PixelRatio.getFontScale();
 
 /** Layout scale: 0.82× on very small phones up to 1.08× on large ones. */
-export const LAYOUT_SCALE = clamp(Math.min(width, 520) / BASE_WIDTH, 0.82, 1.08);
+export const LAYOUT_SCALE = clamp(Math.min(width, APP_MAX_WIDTH) / BASE_WIDTH, 0.82, 1.08);
+
+/** The app's own size: the window, but never wider than APP_MAX_WIDTH. */
+export function useAppWidth() {
+  const { width: w, height } = useWindowDimensions();
+  return { width: Math.min(w, APP_MAX_WIDTH), height };
+}
 
 /** Text scale: moves 80% as far as the layout, and cancels font scaling above the cap. */
 export const TEXT_SCALE = (1 + (LAYOUT_SCALE - 1) * 0.8) * (fontScale > MAX_FONT_MULTIPLIER ? MAX_FONT_MULTIPLIER / fontScale : 1);
