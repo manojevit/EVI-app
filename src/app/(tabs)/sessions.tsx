@@ -242,7 +242,7 @@ function Metric({ icon, value, unit, a11y }: { icon: keyof typeof Ionicons.glyph
   return (
     <View style={styles.metric} accessible accessibilityLabel={`${a11y}: ${value}${unit ? ' ' + unit : ''}`}>
       <View style={styles.metricIcon}>
-        <Ionicons name={icon} size={18} color={Palette.forest} />
+        <Ionicons name={icon} size={15} color={Palette.forest} />
       </View>
       <Text style={styles.metricValue} numberOfLines={1} adjustsFontSizeToFit>
         {value}
@@ -303,10 +303,10 @@ const styles = scaledSheet({
   flowDot: { position: 'absolute', left: 0, width: 8, height: 8, borderRadius: 4, backgroundColor: Palette.volt },
   chargerBox: { width: 56, height: 64, borderRadius: 16, backgroundColor: Palette.forest, alignItems: 'center', justifyContent: 'center', ...Shadow.volt },
   metrics: { flexDirection: 'row', gap: Spacing.sm, alignSelf: 'stretch', marginTop: Spacing.lg },
-  metric: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm, backgroundColor: Palette.surface, borderRadius: 18, paddingVertical: Spacing.md, paddingHorizontal: Spacing.sm, borderWidth: 1, borderColor: Palette.brandTint2 },
-  metricIcon: { width: 34, height: 34, borderRadius: 17, backgroundColor: Palette.voltSoft, alignItems: 'center', justifyContent: 'center' },
-  metricValue: { fontFamily: Font.display, fontSize: 30, lineHeight: 36, color: Palette.ink, flexShrink: 1 },
-  metricUnit: { fontFamily: Font.displaySemi, fontSize: 15, color: Palette.mist },
+  metric: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: Palette.surface, borderRadius: 14, paddingVertical: 10, paddingHorizontal: Spacing.sm, borderWidth: 1, borderColor: Palette.brandTint2 },
+  metricIcon: { width: 28, height: 28, borderRadius: 14, backgroundColor: Palette.voltSoft, alignItems: 'center', justifyContent: 'center' },
+  metricValue: { fontFamily: Font.display, fontSize: 22, lineHeight: 28, color: Palette.ink, flexShrink: 1 },
+  metricUnit: { fontFamily: Font.displaySemi, fontSize: 12, color: Palette.mist },
   battery: { flexDirection: 'row', alignItems: 'center', alignSelf: 'stretch', marginTop: Spacing.md },
   batteryTrack: { flex: 1, height: 16, borderRadius: 6, padding: 2, backgroundColor: Palette.surface, borderWidth: 1.5, borderColor: Palette.brandTint2 },
   batteryFill: { height: '100%', borderRadius: 4 },
