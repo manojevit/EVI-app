@@ -7,6 +7,7 @@ import { Pressable, ScrollView, Text, TextInput, TouchableOpacity, View } from '
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import ConnectorIcon from '@/components/connector-icon';
+import MakeLogo from '@/components/make-logo';
 import VoltButton from '@/components/volt-button';
 import { scaledSheet } from '@/constants/responsive';
 import { Font, Palette, Radius, Spacing } from '@/constants/theme';
@@ -14,16 +15,11 @@ import { CONNECTORS } from '@/data/connectors';
 import { addVehicle } from '@/data/app-store';
 import { CATALOG_MAKES, VEHICLE_CATALOG, type CatalogCar } from '@/data/vehicle-catalog';
 
-/** Short badge text for a brand: "BMW", "Tata Motors" → "TM", "MG Motor" → "MG". */
-const monogram = (make: string) =>
-  make.length <= 4
-    ? make.toUpperCase()
-    : make
-        .split(/[\s-]+/)
-        .slice(0, 2)
-        .map((w) => w[0])
-        .join('')
-        .toUpperCase();
+// VIN: 17 letters/digits, never I, O or Q (ISO 3779)
+const VIN_LENGTH = 17;
+const cleanVin = (v: string) => v.toUpperCase().replace(/[^A-Z0-9]/g, '');
+const vinProblem = (v: string) =>
+  !v ? null : /[IOQ]/.test(v) ? 'A VIN never uses the letters I, O or Q.' : v.length !== VIN_LENGTH ? `A VIN has ${VIN_LENGTH} characters (${v.length} so far).` : null;
 
 const TOP_MAKES = 9; // brands shown before "Show all"
 
@@ -36,6 +32,8 @@ export default function AddVehicleSheet() {
   const [query, setQuery] = useState('');
   const [showAllMakes, setShowAllMakes] = useState(false);
   const [plate, setPlate] = useState('');
+  const [vin, setVin] = useState('');
+  const vinError = vinProblem(vin);
 
   // brands (most models first); search matches a brand or any of its models
   const makes = useMemo(() => {
@@ -59,12 +57,13 @@ export default function AddVehicleSheet() {
     setLook(0);
   };
   const save = () => {
-    if (!car) return;
+    if (!car || vinError) return;
     addVehicle({
       type: 'LMV',
       make: car.make,
       model: car.model,
       plate: plate.trim().toUpperCase() || undefined,
+      vin: vin || undefined,
       connectors: car.connectors,
       photo: photos[Math.min(look, photos.length - 1)],
     });
@@ -139,11 +138,7 @@ export default function AddVehicleSheet() {
           {make && !query ? (
             // once a brand is picked, collapse the grid so its models sit right below
             <View style={styles.pickedMake}>
-              <View style={[styles.mono, styles.monoOn]}>
-                <Text style={[styles.monoText, { color: Palette.white }]} numberOfLines={1}>
-                  {monogram(make)}
-                </Text>
-              </View>
+              <MakeLogo make={make} size={46} selected />
               <View style={{ flex: 1 }}>
                 <Text style={styles.pickedName}>{make}</Text>
                 <Text style={styles.makeCount}>
@@ -160,11 +155,7 @@ export default function AddVehicleSheet() {
                 const on = m === make;
                 return (
                   <TouchableOpacity key={m} onPress={() => pickMake(m)} activeOpacity={0.85} style={[styles.makeTile, on && styles.tileOn]}>
-                    <View style={[styles.mono, on && styles.monoOn]}>
-                      <Text style={[styles.monoText, on && { color: Palette.white }]} numberOfLines={1}>
-                        {monogram(m)}
-                      </Text>
-                    </View>
+                    <MakeLogo make={m} size={48} selected={on} />
                     <Text style={[styles.makeName, on && { color: Palette.forest }]} numberOfLines={1}>
                       {m}
                     </Text>
@@ -217,12 +208,40 @@ export default function AddVehicleSheet() {
             <Text style={styles.waiting}>Filled in automatically once you pick a model.</Text>
           )}
 
-          <Text style={styles.label}>Registration number</Text>
+          {/* 4. details */}
+          <Step n={4} text="Vehicle details" />
+          <Text style={styles.fieldLabel}>Registration number</Text>
           <View style={styles.inputWrap}>
+            <Ionicons name="card-outline" size={18} color={Palette.mist} />
             <TextInput value={plate} onChangeText={setPlate} placeholder="e.g. DL 01 AB 1234" placeholderTextColor={Palette.mistLight} autoCapitalize="characters" style={styles.input} />
           </View>
 
-          <VoltButton label="Add vehicle" icon="add" disabled={!car} onPress={save} style={{ marginTop: Spacing.xxl }} />
+          <View style={styles.fieldHead}>
+            <Text style={styles.fieldLabel}>
+              VIN <Text style={styles.optional}>(optional)</Text>
+            </Text>
+            <Text style={[styles.counter, vin.length === VIN_LENGTH && !vinError && { color: Palette.forest }]}>
+              {vin.length}/{VIN_LENGTH}
+            </Text>
+          </View>
+          <View style={[styles.inputWrap, vinError ? styles.inputBad : vin.length === VIN_LENGTH ? styles.inputOk : null]}>
+            <Ionicons name="barcode-outline" size={18} color={Palette.mist} />
+            <TextInput
+              value={vin}
+              onChangeText={(v) => setVin(cleanVin(v).slice(0, VIN_LENGTH))}
+              placeholder="17-character vehicle number"
+              placeholderTextColor={Palette.mistLight}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              style={[styles.input, styles.vinInput]}
+            />
+            {vin.length === VIN_LENGTH && !vinError ? <Ionicons name="checkmark-circle" size={20} color={Palette.volt} /> : null}
+          </View>
+          <Text style={[styles.hint, vinError ? { color: Palette.red } : null]}>
+            {vinError ?? 'Find it on your RC (registration certificate) or at the bottom of the windscreen.'}
+          </Text>
+
+          <VoltButton label="Add vehicle" icon="add" disabled={!car || !!vinError} onPress={save} style={{ marginTop: Spacing.xxl }} />
         </ScrollView>
       </View>
     </View>
@@ -297,9 +316,6 @@ const styles = scaledSheet({
   searchInput: { flex: 1, fontFamily: Font.medium, fontSize: 15, color: Palette.ink, padding: 0 },
   makeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
   makeTile: { flexBasis: '30%', flexGrow: 1, maxWidth: '32%', alignItems: 'center', gap: 4, backgroundColor: Palette.surface, borderWidth: 1.5, borderColor: Palette.line, borderRadius: Radius.chip, paddingVertical: Spacing.md, paddingHorizontal: 6 },
-  mono: { minWidth: 40, height: 40, paddingHorizontal: 6, borderRadius: 20, backgroundColor: Palette.voltSoft, alignItems: 'center', justifyContent: 'center' },
-  monoOn: { backgroundColor: Palette.volt },
-  monoText: { fontFamily: Font.display, fontSize: 13, color: Palette.forest },
   makeName: { fontFamily: Font.semibold, fontSize: 12, color: Palette.ink, textAlign: 'center' },
   makeCount: { fontFamily: Font.regular, fontSize: 11, color: Palette.mist },
   showAll: { flexBasis: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: Spacing.md },
@@ -326,7 +342,13 @@ const styles = scaledSheet({
   connCurrent: { fontFamily: Font.regular, fontSize: 12, color: Palette.mist },
   hint: { fontFamily: Font.regular, fontSize: 13, color: Palette.mist, marginTop: Spacing.sm, lineHeight: 19 },
 
-  label: { fontFamily: Font.semibold, fontSize: 15, color: Palette.ink, marginTop: Spacing.xl, marginBottom: Spacing.sm },
-  inputWrap: { backgroundColor: Palette.surface, borderWidth: 1, borderColor: Palette.line, borderRadius: Radius.chip, paddingHorizontal: Spacing.lg, height: 54, justifyContent: 'center' },
-  input: { fontFamily: Font.medium, fontSize: 16, color: Palette.ink, padding: 0 },
+  fieldLabel: { fontFamily: Font.semibold, fontSize: 14, color: Palette.ink, marginBottom: Spacing.sm },
+  fieldHead: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginTop: Spacing.lg },
+  optional: { fontFamily: Font.regular, color: Palette.mist },
+  counter: { fontFamily: Font.semibold, fontSize: 12, color: Palette.mist },
+  inputWrap: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, backgroundColor: Palette.surface, borderWidth: 1, borderColor: Palette.line, borderRadius: Radius.chip, paddingHorizontal: Spacing.lg, height: 54 },
+  inputOk: { borderColor: Palette.volt },
+  inputBad: { borderColor: Palette.red },
+  input: { flex: 1, minWidth: 0, fontFamily: Font.medium, fontSize: 16, color: Palette.ink, padding: 0, outlineWidth: 0 },
+  vinInput: { letterSpacing: 1 },
 });

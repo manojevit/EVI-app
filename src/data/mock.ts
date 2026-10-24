@@ -368,6 +368,8 @@ export interface Vehicle {
   make: string;
   model: string;
   plate?: string;
+  /** 17-character vehicle identification number */
+  vin?: string;
   connectors: ConnectorKey[];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   photo?: any;

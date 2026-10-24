@@ -7,6 +7,7 @@ import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-nati
 import ActiveSessionBar from '@/components/active-session-bar';
 import AppHeader from '@/components/app-header';
 import ConnectorIcon from '@/components/connector-icon';
+import MakeLogo from '@/components/make-logo';
 import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
 import { CONNECTORS } from '@/data/connectors';
 import { removeVehicle, useAppStore } from '@/data/app-store';
@@ -49,9 +50,11 @@ export default function VehiclesScreen() {
 
               <View style={styles.info}>
                 <View style={styles.nameRow}>
+                  <MakeLogo make={v.make} size={42} />
                   <View style={{ flex: 1 }}>
                     <Text style={styles.name}>{v.model}</Text>
                     <Text style={styles.make}>{v.make}{v.plate ? ` · ${v.plate}` : ''}</Text>
+                    {v.vin ? <Text style={styles.vin}>VIN ••••{v.vin.slice(-6)}</Text> : null}
                   </View>
                   <TouchableOpacity hitSlop={10} style={styles.trash} onPress={() => removeVehicle(v.id)} accessibilityLabel={`Remove ${v.model}`}>
                     <Ionicons name="trash-outline" size={20} color={Palette.mist} />
@@ -100,9 +103,10 @@ const styles = scaledSheet({
   typeText: { fontFamily: Font.semibold, fontSize: 12, color: Palette.forest },
 
   info: { padding: Spacing.lg, gap: Spacing.sm },
-  nameRow: { flexDirection: 'row', alignItems: 'center' },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
   name: { fontFamily: Font.display, fontSize: 21, color: Palette.ink },
   make: { fontFamily: Font.regular, fontSize: 14, color: Palette.mist, marginTop: 2 },
+  vin: { fontFamily: Font.medium, fontSize: 12, color: Palette.mist, marginTop: 2, letterSpacing: 0.5 },
   trash: { padding: 6 },
   connHead: { fontFamily: Font.semibold, fontSize: 13, color: Palette.mist, marginTop: Spacing.sm },
   connRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
