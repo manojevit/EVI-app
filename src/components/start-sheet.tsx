@@ -4,7 +4,6 @@ import { Modal, Pressable, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import ConnectorIcon from '@/components/connector-icon';
-import VoltButton from '@/components/volt-button';
 import { scaledSheet } from '@/constants/responsive';
 import { Font, Palette, Radius, Spacing } from '@/constants/theme';
 import { FREE_CANCEL_MINS, RESERVATION_FEE, TIME_OPTIONS, chargeEstimate } from '@/data/app-store';
@@ -58,7 +57,7 @@ export default function StartSheet({
           {/* what you're about to use */}
           <View style={styles.head}>
             <View style={styles.iconBox}>
-              <ConnectorIcon type={connector.type} size={36} original />
+              <ConnectorIcon type={connector.type} size={30} original />
             </View>
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={styles.title}>{CONNECTORS[connector.type].label}</Text>
@@ -86,7 +85,7 @@ export default function StartSheet({
                 style={[styles.tab, mode === m && styles.tabOn]}
                 accessibilityRole="tab"
                 accessibilityState={{ selected: mode === m }}>
-                <Ionicons name={icon} size={16} color={mode === m ? Palette.forest : Palette.mist} />
+                <Ionicons name={icon} size={15} color={mode === m ? Palette.forest : Palette.mist} />
                 <Text style={[styles.tabText, mode === m && styles.tabTextOn]}>{label}</Text>
               </TouchableOpacity>
             ))}
@@ -103,7 +102,7 @@ export default function StartSheet({
             </View>
           ) : (
             <View style={styles.fullNote}>
-              <Ionicons name="battery-full" size={22} color={Palette.forest} />
+              <Ionicons name="battery-full" size={19} color={Palette.forest} />
               <Text style={styles.fullText}>Charges until your battery is full, then stops by itself. You can stop it any time.</Text>
             </View>
           )}
@@ -117,12 +116,14 @@ export default function StartSheet({
             <Estimate label="Cost" value={`≈ ₹${Math.round(est.costINR)}`} />
           </View>
 
-          <VoltButton
-            label={mode === 'time' ? `Start charging · ${mins} min` : 'Start charging · until full'}
-            icon="flash"
-            onPress={() => onStart(mode === 'time' ? mins : null)}
+          <TouchableOpacity
+            style={[styles.startBtn, !canStart && styles.startOff]}
+            activeOpacity={0.88}
             disabled={!canStart}
-          />
+            onPress={() => onStart(mode === 'time' ? mins : null)}>
+            <Ionicons name="flash" size={17} color={Palette.white} />
+            <Text style={styles.startText}>{mode === 'time' ? `Start charging · ${mins} min` : 'Start charging · until full'}</Text>
+          </TouchableOpacity>
           {!canStart ? <Text style={styles.warn}>You&apos;re already charging. Stop that charge first.</Text> : null}
 
           {/* not there yet */}
@@ -132,7 +133,7 @@ export default function StartSheet({
             <View style={styles.orLine} />
           </View>
           <TouchableOpacity style={styles.reserveBtn} activeOpacity={0.85} onPress={() => onReserve(hold)}>
-            <Ionicons name="calendar-outline" size={18} color={Palette.forest} />
+            <Ionicons name="calendar-outline" size={16} color={Palette.forest} />
             <Text style={styles.reserveText}>
               Reserve for {hold} min · ₹{RESERVATION_FEE}
             </Text>
@@ -161,41 +162,44 @@ function Estimate({ label, value }: { label: string; value: string }) {
 const styles = scaledSheet({
   overlay: { flex: 1, justifyContent: 'flex-end' },
   backdrop: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(8,24,15,0.5)' },
-  sheet: { backgroundColor: Palette.canvas, borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: Spacing.xl, paddingTop: Spacing.md, gap: Spacing.md },
-  grabber: { alignSelf: 'center', width: 44, height: 5, borderRadius: 3, backgroundColor: Palette.line },
+  sheet: { backgroundColor: Palette.canvas, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: Spacing.lg, paddingTop: Spacing.sm, gap: 10 },
+  grabber: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: Palette.line, marginBottom: 2 },
 
-  head: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
-  iconBox: { width: 52, height: 52, borderRadius: 16, backgroundColor: Palette.surface, alignItems: 'center', justifyContent: 'center' },
-  title: { fontFamily: Font.display, fontSize: 19, color: Palette.ink },
-  sub: { fontFamily: Font.regular, fontSize: 12, color: Palette.mist, marginTop: 2 },
+  head: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  iconBox: { width: 42, height: 42, borderRadius: 12, backgroundColor: Palette.surface, alignItems: 'center', justifyContent: 'center' },
+  title: { fontFamily: Font.displaySemi, fontSize: 16, color: Palette.ink },
+  sub: { fontFamily: Font.regular, fontSize: 12, color: Palette.mist, marginTop: 1 },
 
-  tabs: { flexDirection: 'row', backgroundColor: Palette.canvasDeep, borderRadius: Radius.pill, padding: 4 },
-  tab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, height: 40, borderRadius: Radius.pill },
+  tabs: { flexDirection: 'row', backgroundColor: Palette.canvasDeep, borderRadius: Radius.pill, padding: 3 },
+  tab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, height: 32, borderRadius: Radius.pill },
   tabOn: { backgroundColor: Palette.surface },
-  tabText: { fontFamily: Font.semibold, fontSize: 14, color: Palette.mist },
+  tabText: { fontFamily: Font.semibold, fontSize: 13, color: Palette.mist },
   tabTextOn: { color: Palette.forest },
 
   chips: { flexDirection: 'row', gap: Spacing.sm },
-  chip: { flex: 1, height: 58, borderRadius: 16, borderWidth: 1.5, borderColor: Palette.line, backgroundColor: Palette.surface, alignItems: 'center', justifyContent: 'center' },
+  chip: { flex: 1, height: 42, borderRadius: 12, borderWidth: 1.5, borderColor: Palette.line, backgroundColor: Palette.surface, flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center', gap: 3, paddingTop: 10 },
   chipOn: { backgroundColor: Palette.forest, borderColor: Palette.forest },
-  chipNum: { fontFamily: Font.display, fontSize: 19, color: Palette.ink },
-  chipUnit: { fontFamily: Font.medium, fontSize: 11, color: Palette.mist, marginTop: -2 },
+  chipNum: { fontFamily: Font.displaySemi, fontSize: 16, color: Palette.ink },
+  chipUnit: { fontFamily: Font.medium, fontSize: 11, color: Palette.mist },
   chipTextOn: { color: Palette.white },
-  fullNote: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, backgroundColor: Palette.voltSofter, borderRadius: 16, borderWidth: 1, borderColor: Palette.brandTint2, padding: Spacing.md, minHeight: 58 },
-  fullText: { flex: 1, fontFamily: Font.medium, fontSize: 13, lineHeight: 18, color: Palette.inkSoft },
+  fullNote: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: Palette.voltSofter, borderRadius: 12, borderWidth: 1, borderColor: Palette.brandTint2, paddingHorizontal: Spacing.md, paddingVertical: 8, minHeight: 42 },
+  fullText: { flex: 1, fontFamily: Font.medium, fontSize: 12, lineHeight: 16, color: Palette.inkSoft },
 
-  estimate: { flexDirection: 'row', alignItems: 'center', backgroundColor: Palette.surface, borderRadius: 16, paddingVertical: Spacing.md },
+  estimate: { flexDirection: 'row', alignItems: 'center', backgroundColor: Palette.surface, borderRadius: 12, paddingVertical: 8 },
   est: { flex: 1, alignItems: 'center', paddingHorizontal: 4 },
-  estValue: { fontFamily: Font.display, fontSize: 15, color: Palette.ink },
-  estLabel: { fontFamily: Font.medium, fontSize: 11, color: Palette.mist, marginTop: 2 },
+  estValue: { fontFamily: Font.displaySemi, fontSize: 13, color: Palette.ink },
+  estLabel: { fontFamily: Font.medium, fontSize: 10, color: Palette.mist, marginTop: 1 },
   estLine: { width: 1, alignSelf: 'stretch', backgroundColor: Palette.line },
 
-  warn: { fontFamily: Font.medium, fontSize: 12, color: Palette.amberDeep, textAlign: 'center', marginTop: -Spacing.xs },
-  orRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginTop: Spacing.xs },
+  startBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, height: 44, borderRadius: Radius.pill, backgroundColor: Palette.forest },
+  startOff: { opacity: 0.45 },
+  startText: { fontFamily: Font.bold, fontSize: 15, color: Palette.white },
+  warn: { fontFamily: Font.medium, fontSize: 12, color: Palette.amberDeep, textAlign: 'center', marginTop: -4 },
+  orRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginTop: 2 },
   orLine: { flex: 1, height: 1, backgroundColor: Palette.line },
-  orText: { fontFamily: Font.medium, fontSize: 12, color: Palette.mist },
-  reserveBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, height: 50, borderRadius: Radius.pill, borderWidth: 1.5, borderColor: Palette.forest, backgroundColor: Palette.surface },
-  reserveText: { fontFamily: Font.bold, fontSize: 15, color: Palette.forest },
-  reserveNote: { fontFamily: Font.regular, fontSize: 12, lineHeight: 17, color: Palette.mist, textAlign: 'center', marginTop: -Spacing.xs },
-  error: { fontFamily: Font.medium, fontSize: 13, color: Palette.red, textAlign: 'center' },
+  orText: { fontFamily: Font.medium, fontSize: 11, color: Palette.mist },
+  reserveBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, height: 40, borderRadius: Radius.pill, borderWidth: 1.5, borderColor: Palette.forest, backgroundColor: Palette.surface },
+  reserveText: { fontFamily: Font.bold, fontSize: 14, color: Palette.forest },
+  reserveNote: { fontFamily: Font.regular, fontSize: 11, lineHeight: 15, color: Palette.mist, textAlign: 'center', marginTop: -4 },
+  error: { fontFamily: Font.medium, fontSize: 12, color: Palette.red, textAlign: 'center' },
 });
