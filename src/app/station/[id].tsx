@@ -802,9 +802,10 @@ const styles = scaledSheet({
   onSiteRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
   onSite: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: Radius.pill, paddingHorizontal: 11, paddingVertical: 7 },
   onSiteText: { fontFamily: Font.semibold, fontSize: 13 },
-  filterScroll: { marginHorizontal: -Spacing.lg },
-  filterRow: { paddingHorizontal: Spacing.lg, gap: Spacing.sm },
-  filter: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: Palette.surface, borderRadius: Radius.pill, borderWidth: 1, borderColor: Palette.line, paddingHorizontal: 12, paddingVertical: 7 },
+  // flexGrow 0: a ScrollView grows by default, which stretched the chips when a filter left the list short
+  filterScroll: { marginHorizontal: -Spacing.lg, flexGrow: 0, flexShrink: 0 },
+  filterRow: { paddingHorizontal: Spacing.lg, gap: Spacing.sm, alignItems: 'center' },
+  filter: { flexDirection: 'row', alignItems: 'center', gap: 5, height: 34, backgroundColor: Palette.surface, borderRadius: Radius.pill, borderWidth: 1, borderColor: Palette.line, paddingHorizontal: 12 },
   filterOn: { backgroundColor: Palette.ink, borderColor: Palette.ink },
   filterText: { fontFamily: Font.semibold, fontSize: 13, color: Palette.inkSoft },
   filterTextOn: { color: Palette.white },
