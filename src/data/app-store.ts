@@ -11,6 +11,7 @@ import {
   SESSION_HISTORY,
   STATIONS,
   TICKETS,
+  USER_LOCATION,
   VEHICLES,
   WALLET_TXNS,
   type Charger,
@@ -51,6 +52,14 @@ interface AppState {
   favourites: string[];
   filters: MapFilters;
   planId: string | null;
+  /** where distances count from: the phone's GPS once known, else a demo spot in central Delhi */
+  location: UserLocation;
+}
+
+export interface UserLocation {
+  latitude: number;
+  longitude: number;
+  live: boolean;
 }
 
 let state: AppState = {
@@ -65,6 +74,7 @@ let state: AppState = {
   favourites: [],
   filters: NO_FILTERS,
   planId: null,
+  location: { ...USER_LOCATION, live: false },
 };
 
 const listeners = new Set<() => void>();
@@ -226,4 +236,8 @@ export function subscribePlan(plan: { id: string; name: string; priceINR: number
     txns: [{ id: `w${Date.now()}`, kind: 'plan', title: `${plan.name} · monthly`, dateLabel, amount: -plan.priceINR }, ...state.txns],
   });
   return true;
+}
+
+export function setLocation(latitude: number, longitude: number) {
+  set({ location: { latitude, longitude, live: true } });
 }

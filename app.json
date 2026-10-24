@@ -36,6 +36,12 @@
         }
       ],
       [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "EVIT uses your location to show chargers near you and how far away they are."
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "backgroundColor": "#F3F5F0",
