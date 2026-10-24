@@ -11,7 +11,7 @@ import { scaledSheet } from '@/constants/responsive';
 import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
 import { liveReservation, setFilters, useAppStore } from '@/data/app-store';
 import { ACCOUNT, formatINR } from '@/data/mock';
-import { clock, dayLabel } from '@/data/reservation-helpers';
+import { MIN, clock } from '@/data/reservation-helpers';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 type Item = { icon: IconName; title: string; hint: string; route: string; badge?: string };
@@ -40,9 +40,9 @@ export default function AccountScreen() {
       {
         icon: 'calendar-outline',
         title: 'Reservations',
-        hint: booked ? `${dayLabel(booked.startAt)}, ${clock(booked.startAt)}` : 'Hold a charger before you arrive',
+        hint: booked ? `Held until ${clock(booked.startAt + booked.holdMins * MIN)}` : 'Hold a charger before you arrive',
         route: '/reservations',
-        badge: booked ? '1 upcoming' : undefined,
+        badge: booked ? '1 active' : undefined,
       },
       { icon: 'card-outline', title: 'RFID cards', hint: activeCards ? `${activeCards} active ${activeCards === 1 ? 'card' : 'cards'}` : 'Charge without your phone', route: '/rfid' },
       { icon: 'time-outline', title: 'Charging history', hint: 'Receipts for every charge', route: '/history' },

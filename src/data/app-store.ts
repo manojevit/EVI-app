@@ -32,16 +32,21 @@ export interface LiveSession {
   startedAt: number;
   /** battery % when the session started — DC chargers only (AC can't read it) */
   startSoc: number | null;
+  /** stop after this many minutes; null/absent = until the battery is full */
+  limitMins?: number | null;
 }
+
+/** Charge or hold lengths offered on the start sheet. */
+export const TIME_OPTIONS = [15, 30, 45, 60] as const;
 
 export interface Reservation {
   id: string;
   stationId: string;
   chargerId: string;
   connectorId: string;
-  /** when the hold starts (the driver's arrival time) */
+  /** when the hold starts (the moment it's booked) */
   startAt: number;
-  holdMins: 15 | 30;
+  holdMins: number;
   feeINR: number;
   /** 'booked' turns into upcoming / held / expired by the clock — see reservationState */
   status: 'booked' | 'used' | 'cancelled';
@@ -216,24 +221,40 @@ export function sessionParts(s: LiveSession) {
   return findParts(s) as { station: Station; charger: Charger; connector: Connector };
 }
 
+const DEMO_START_SOC = 34; // battery % a new DC session starts from in the demo
+const ratedKwOf = (charger: Charger) =>
+  charger.current === 'DC' ? +(charger.powerKw * 0.75).toFixed(1) : +(Math.min(charger.powerKw, 7.4) * 0.46).toFixed(1);
+// seconds until full: DC knows the starting %; AC assumes the car arrived at about 40%
+const secondsToFull = (charger: Charger, startSoc: number | null) =>
+  Math.round(((BATTERY_KWH * (1 - (charger.current === 'DC' && startSoc != null ? startSoc : 40) / 100)) / ratedKwOf(charger)) * 3600);
+
+/** What a charge on this charger would come to, for the start sheet. */
+export function chargeEstimate(station: Station, charger: Charger, limitMins: number | null) {
+  const full = secondsToFull(charger, charger.current === 'DC' ? DEMO_START_SOC : null);
+  const seconds = limitMins ? Math.min(limitMins * 60, full) : full;
+  const kwh = (ratedKwOf(charger) * seconds) / 3600;
+  return { minutes: Math.round(seconds / 60), kwh, costINR: kwh * station.pricePerKwh };
+}
+
 /**
- * Live numbers for a running session at time `now`. Charging stops by itself when the
- * battery is full, so a session left running for days doesn't keep adding energy and cost.
+ * Live numbers for a running session at time `now`. Charging stops by itself at the time
+ * limit or when the battery is full, so a session left running doesn't keep adding cost.
  */
 export function sessionReadout(s: LiveSession, now = Date.now()) {
   const { station, charger } = sessionParts(s);
   const dc = charger.current === 'DC';
-  const ratedKw = dc ? +(charger.powerKw * 0.75).toFixed(1) : +(Math.min(charger.powerKw, 7.4) * 0.46).toFixed(1);
-  // energy until full: DC knows the starting %; AC assumes the car arrived at about 40%
-  const roomKwh = BATTERY_KWH * (1 - (dc && s.startSoc != null ? s.startSoc : 40) / 100);
-  const fullAfter = Math.round((roomKwh / ratedKw) * 3600);
+  const ratedKw = ratedKwOf(charger);
+  const fullAfter = secondsToFull(charger, s.startSoc);
+  const limit = s.limitMins ? s.limitMins * 60 : null;
+  const stopAfter = limit != null ? Math.min(limit, fullAfter) : fullAfter;
   const elapsed = Math.max(0, Math.floor((now - s.startedAt) / 1000));
-  const full = elapsed >= fullAfter;
-  const seconds = Math.min(elapsed, fullAfter);
+  const full = elapsed >= stopAfter; // finished, by time limit or full battery
+  const doneBy: 'time' | 'full' | null = full ? (limit != null && limit < fullAfter ? 'time' : 'full') : null;
+  const seconds = Math.min(elapsed, stopAfter);
   const energyKwh = (ratedKw * seconds) / 3600;
   const costINR = energyKwh * station.pricePerKwh;
   const soc = dc && s.startSoc != null ? Math.min(100, s.startSoc + (energyKwh / BATTERY_KWH) * 100) : null;
-  return { dc, powerKw: full ? 0 : ratedKw, seconds, energyKwh, costINR, soc, full };
+  return { dc, powerKw: full ? 0 : ratedKw, seconds, energyKwh, costINR, soc, full, doneBy, limitMins: s.limitMins ?? null, endsAt: s.startedAt + stopAfter * 1000 };
 }
 
 export const formatDuration = (sec: number) => {
@@ -244,7 +265,7 @@ export const formatDuration = (sec: number) => {
 };
 
 // ---- actions ----
-export function startSession(stationId: string, chargerId: string, connectorId: string) {
+export function startSession(stationId: string, chargerId: string, connectorId: string, limitMins: number | null = null) {
   const station = STATIONS.find((x) => x.id === stationId);
   const charger = station?.chargers.find((c) => c.id === chargerId);
   const now = Date.now();
@@ -259,7 +280,8 @@ export function startSession(stationId: string, chargerId: string, connectorId: 
       chargerId,
       connectorId,
       startedAt: Date.now(),
-      startSoc: charger?.current === 'DC' ? 34 : null, // demo starting battery %
+      startSoc: charger?.current === 'DC' ? DEMO_START_SOC : null,
+      limitMins,
     },
   });
 }
@@ -293,7 +315,7 @@ export function stopSession(): string | null {
     dateLabel,
     costINR: +r.costINR.toFixed(2),
     energyKwh: +r.energyKwh.toFixed(2),
-    reason: 'Stopped from the app',
+    reason: r.doneBy === 'time' ? 'Reached your time limit' : r.doneBy === 'full' ? 'Battery full' : 'Stopped from the app',
   };
   set({
     session: null,
@@ -394,24 +416,28 @@ export const liveReservation = (list: Reservation[], now = Date.now()) =>
 const shortDate = (t: number) =>
   new Date(t).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false });
 
-/** Books a connector; the fee comes from the wallet. Returns why it failed, or null. */
-export function reserve(r: Omit<Reservation, 'id' | 'feeINR' | 'status'>): 'balance' | 'exists' | null {
+/** Cancelling within this long after booking refunds the fee. */
+export const FREE_CANCEL_MINS = 5;
+export const canRefund = (r: Reservation, now = Date.now()) => now < r.startAt + FREE_CANCEL_MINS * 60000;
+
+/** Holds a connector from now for `holdMins`; the fee comes from the wallet. Returns why it failed, or null. */
+export function reserve(r: Omit<Reservation, 'id' | 'feeINR' | 'status' | 'startAt'>): 'balance' | 'exists' | null {
   if (liveReservation(state.reservations)) return 'exists';
   if (state.walletBalance < RESERVATION_FEE) return 'balance';
   const station = STATIONS.find((s) => s.id === r.stationId);
   set({
-    reservations: [{ ...r, id: `rs${Date.now()}`, feeINR: RESERVATION_FEE, status: 'booked' }, ...state.reservations],
+    reservations: [{ ...r, id: `rs${Date.now()}`, startAt: Date.now(), feeINR: RESERVATION_FEE, status: 'booked' }, ...state.reservations],
     walletBalance: +(state.walletBalance - RESERVATION_FEE).toFixed(2),
     txns: [{ id: `w${Date.now()}`, kind: 'charge', title: `Reservation · ${station?.name ?? ''}`, dateLabel: shortDate(Date.now()), amount: -RESERVATION_FEE }, ...state.txns],
   });
   return null;
 }
 
-/** Cancels a booking; the fee comes back if the slot hasn't started yet. */
+/** Cancels a booking; the fee comes back within the first few minutes. */
 export function cancelReservation(id: string) {
   const r = state.reservations.find((x) => x.id === id);
   if (!r) return;
-  const refund = reservationState(r) === 'upcoming';
+  const refund = canRefund(r);
   set({
     reservations: state.reservations.map((x) => (x.id === id ? { ...x, status: 'cancelled' as const } : x)),
     ...(refund

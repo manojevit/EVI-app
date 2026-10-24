@@ -80,7 +80,6 @@ export default function RootLayout() {
           <Stack.Screen name="settings" />
           <Stack.Screen name="wallet" />
           <Stack.Screen name="reservations" />
-          <Stack.Screen name="reserve" />
           <Stack.Screen name="rfid" />
           <Stack.Screen name="add-rfid" options={{ presentation: 'transparentModal', animation: 'slide_from_bottom' }} />
           <Stack.Screen name="scan" />

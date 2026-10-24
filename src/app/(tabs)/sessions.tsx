@@ -13,6 +13,7 @@ import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
 import { formatDuration, sessionParts, sessionReadout, showDemoSession, stopSession, useAppStore, type LiveSession } from '@/data/app-store';
 import { CONNECTORS } from '@/data/connectors';
 import { formatINR } from '@/data/mock';
+import { clock } from '@/data/reservation-helpers';
 import { vehiclePhoto } from '@/data/vehicle-images';
 import { useNow } from '@/hooks/use-now';
 
@@ -110,7 +111,7 @@ function LiveView({ session }: { session: LiveSession }) {
         <View style={styles.heroTop}>
           <View style={styles.statusPill}>
             {r.full ? <Ionicons name="checkmark-circle" size={14} color={Palette.forest} /> : <LiveDot />}
-            <Text style={styles.statusText}>{r.full ? 'Charge complete' : 'Charging'}</Text>
+            <Text style={styles.statusText}>{r.doneBy === 'time' ? "Time's up" : r.full ? 'Charge complete' : 'Charging'}</Text>
           </View>
           <View style={[styles.modePill, r.dc && styles.modePillDc]}>
             <Ionicons name="flash" size={12} color={r.dc ? Palette.white : Palette.forest} />
@@ -135,7 +136,7 @@ function LiveView({ session }: { session: LiveSession }) {
               <View style={styles.batteryCap} />
             </View>
             <Text style={styles.kw}>
-              <Ionicons name={r.full ? 'checkmark-circle' : 'flash'} size={13} color={Palette.forest} /> {r.full ? 'Full' : `${r.powerKw} kW`}
+              <Ionicons name={r.full ? 'checkmark-circle' : 'flash'} size={13} color={Palette.forest} /> {r.doneBy === 'full' ? 'Full' : r.full ? 'Stopped' : `${r.powerKw} kW`}
             </Text>
           </View>
         ) : (
@@ -150,6 +151,13 @@ function LiveView({ session }: { session: LiveSession }) {
             )}
           </View>
         )}
+
+        {!r.full ? (
+          <View style={styles.limitPill}>
+            <Ionicons name={r.limitMins ? 'timer-outline' : 'battery-charging-outline'} size={14} color={Palette.forest} />
+            <Text style={styles.limitText}>{r.limitMins ? `Stops at ${clock(r.endsAt)} · ${r.limitMins} min` : 'Charging until full'}</Text>
+          </View>
+        ) : null}
 
         <View style={styles.stationRow}>
           <MaterialCommunityIcons name="ev-station" size={16} color={Palette.mist} />
@@ -292,6 +300,8 @@ const styles = scaledSheet({
   batteryCap: { width: 4, height: 8, borderTopRightRadius: 2, borderBottomRightRadius: 2, backgroundColor: Palette.brandTint2, marginLeft: 2 },
   kw: { fontFamily: Font.semibold, fontSize: 14, color: Palette.forest, marginTop: Spacing.sm },
 
+  limitPill: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: Spacing.md, backgroundColor: Palette.surface, borderRadius: Radius.pill, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: Palette.brandTint2 },
+  limitText: { fontFamily: Font.semibold, fontSize: 13, color: Palette.forest },
   stationRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: Spacing.lg, alignSelf: 'stretch', justifyContent: 'center' },
   station: { fontFamily: Font.semibold, fontSize: 13, color: Palette.ink, flexShrink: 1 },
   connector: { fontFamily: Font.regular, color: Palette.mist },

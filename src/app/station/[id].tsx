@@ -18,10 +18,11 @@ import {
 
 import AppHeader from '@/components/app-header';
 import ConnectorIcon from '@/components/connector-icon';
+import StartSheet from '@/components/start-sheet';
 import VoltButton from '@/components/volt-button';
 import { s, scaledSheet } from '@/constants/responsive';
 import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
-import { startSession, submitReview, toggleFavourite, useAppStore } from '@/data/app-store';
+import { RESERVATION_FEE, liveReservation, reserve, startSession, submitReview, toggleFavourite, useAppStore } from '@/data/app-store';
 import { CONNECTORS, type ConnectorKey } from '@/data/connectors';
 import {
   STATIONS,
@@ -92,9 +93,28 @@ export default function StationDetail() {
     if (scrollY.current > tabsY.current) scrollRef.current?.scrollTo({ y: tabsY.current, animated: false });
   };
 
-  const start = (charger: Charger, connector: Connector) => {
-    startSession(station.id, charger.id, connector.id);
+  // Start opens a sheet: charge for a set time / until full, or reserve the connector
+  const [picked, setPicked] = useState<{ charger: Charger; connector: Connector } | null>(null);
+  const [sheetError, setSheetError] = useState<string | null>(null);
+  const reservations = useAppStore((st) => st.reservations);
+  const booked = liveReservation(reservations);
+  const openSheet = (charger: Charger, connector: Connector) => {
+    setSheetError(null);
+    setPicked({ charger, connector });
+  };
+  const start = (limitMins: number | null) => {
+    if (!picked) return;
+    startSession(station.id, picked.charger.id, picked.connector.id, limitMins);
+    setPicked(null);
     router.navigate('/sessions');
+  };
+  const book = (holdMins: number) => {
+    if (!picked) return;
+    const why = reserve({ stationId: station.id, chargerId: picked.charger.id, connectorId: picked.connector.id, holdMins });
+    if (why === 'exists') return setSheetError('You already have a reservation. Cancel it in Account → Reservations first.');
+    if (why === 'balance') return setSheetError(`Add at least ₹${RESERVATION_FEE} to your wallet to reserve.`);
+    setPicked(null);
+    router.push('/reservations' as never);
   };
 
   return (
@@ -187,8 +207,8 @@ export default function StationDetail() {
                   charger={ch}
                   matches={vehicle?.connectors ?? []}
                   activeConnectorId={session?.stationId === station.id && session.chargerId === ch.id ? session.connectorId : null}
-                  canStart={!session}
-                  onStart={(c) => start(ch, c)}
+                  reservedConnectorId={booked?.stationId === station.id && booked.chargerId === ch.id ? booked.connectorId : null}
+                  onStart={(c) => openSheet(ch, c)}
                   onOpenSession={() => router.navigate('/sessions')}
                 />
               ))}
@@ -199,6 +219,18 @@ export default function StationDetail() {
           {tab === 'Reviews' ? <ReviewsTab station={station} rating={rating} ratingCount={ratingCount} mine={mine} /> : null}
         </View>
       </ScrollView>
+      {picked ? (
+        <StartSheet
+          station={station}
+          charger={picked.charger}
+          connector={picked.connector}
+          canStart={!session}
+          error={sheetError}
+          onStart={start}
+          onReserve={book}
+          onClose={() => setPicked(null)}
+        />
+      ) : null}
     </KeyboardAvoidingView>
   );
 }
@@ -284,14 +316,15 @@ function ChargerCard({
   charger,
   matches,
   activeConnectorId,
-  canStart,
+  reservedConnectorId,
   onStart,
   onOpenSession,
 }: {
   charger: Charger;
   matches: string[];
   activeConnectorId: string | null;
-  canStart: boolean;
+  /** the connector the user has reserved here, if any */
+  reservedConnectorId: string | null;
   onStart: (c: Connector) => void;
   onOpenSession: () => void;
 }) {
@@ -319,11 +352,10 @@ function ChargerCard({
         </View>
       </View>
 
-
       {charger.connectors.map((c, i) => {
         const st = state(c);
         const lit = st === 'free' || st === 'mine';
-        const label = { mine: 'Your session', free: 'Available', busy: 'In use', off: off ? 'Offline' : 'Unavailable' }[st];
+        const label = { mine: 'Your session', free: c.id === reservedConnectorId ? 'Reserved' : 'Available', busy: 'In use', off: off ? 'Offline' : 'Unavailable' }[st];
         const tone = { mine: Palette.forest, free: Palette.forest, busy: Palette.amberDeep, off: Palette.mist }[st];
         return (
           <View key={c.id} style={[styles.connRow, i > 0 && styles.connDivider]}>
@@ -346,7 +378,7 @@ function ChargerCard({
                 <Text style={styles.mineText}>View</Text>
               </TouchableOpacity>
             ) : st === 'free' ? (
-              <TouchableOpacity style={[styles.startBtn, !canStart && styles.startOff]} activeOpacity={0.85} disabled={!canStart} onPress={() => onStart(c)} accessibilityLabel={`Start charging on connector ${c.number}`}>
+              <TouchableOpacity style={styles.startBtn} activeOpacity={0.85} onPress={() => onStart(c)} accessibilityLabel={`Start or reserve connector ${c.number}`}>
                 <Ionicons name="flash" size={13} color={Palette.white} />
                 <Text style={styles.startText}>Start</Text>
               </TouchableOpacity>
@@ -728,7 +760,6 @@ const styles = scaledSheet({
   fitsTag: { fontFamily: Font.bold, fontSize: 10, color: Palette.forest, backgroundColor: Palette.voltSoft, borderRadius: Radius.pill, paddingHorizontal: 7, paddingVertical: 2, overflow: 'hidden' },
   connMeta: { fontFamily: Font.regular, fontSize: 13, color: Palette.mist, marginTop: 2 },
   startBtn: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: Palette.forest, borderRadius: Radius.pill, paddingHorizontal: 14, paddingVertical: 9 },
-  startOff: { opacity: 0.4 },
   startText: { fontFamily: Font.bold, fontSize: 13, color: Palette.white },
   mineBtn: { backgroundColor: Palette.voltSoft, borderRadius: Radius.pill, paddingHorizontal: Spacing.lg, paddingVertical: 9, borderWidth: 1, borderColor: Palette.volt },
   mineText: { fontFamily: Font.bold, fontSize: 13, color: Palette.forest },

@@ -12,7 +12,9 @@ import VoltButton from '@/components/volt-button';
 import { scaledSheet } from '@/constants/responsive';
 import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
 import {
+  FREE_CANCEL_MINS,
   RESERVATION_FEE,
+  canRefund,
   cancelReservation,
   liveReservation,
   reservationState,
@@ -58,16 +60,16 @@ export default function ReservationsScreen() {
             <View style={styles.emptyIcon}>
               <Ionicons name="calendar-outline" size={28} color={Palette.forest} />
             </View>
-            <Text style={styles.emptyTitle}>No upcoming reservation</Text>
-            <Text style={styles.emptyText}>Book a connector up to 2 hours ahead. We hold it for 15 or 30 minutes after your arrival time.</Text>
-            <VoltButton label="Reserve a charger" icon="add" onPress={() => router.push('/reserve' as never)} style={{ alignSelf: 'stretch', marginTop: Spacing.lg }} />
+            <Text style={styles.emptyTitle}>No reservation right now</Text>
+            <Text style={styles.emptyText}>Open a station, tap Start on a free connector, then Reserve. We hold it for you for 15 to 60 minutes.</Text>
+            <VoltButton label="Find a charger" icon="map-outline" onPress={() => router.navigate('/map')} style={{ alignSelf: 'stretch', marginTop: Spacing.lg }} />
           </View>
         )}
 
         <View style={styles.rules}>
           <Rule icon="wallet-outline" text={`₹${RESERVATION_FEE} per booking, paid from your wallet.`} />
-          <Rule icon="arrow-undo-outline" text="Cancel before your arrival time and you get it back." />
-          <Rule icon="time-outline" text="Not there by the end of the hold? The connector is released and the fee isn't refunded." />
+          <Rule icon="arrow-undo-outline" text={`Cancel within ${FREE_CANCEL_MINS} minutes of booking and you get it back.`} />
+          <Rule icon="time-outline" text="Not there when the hold ends? The connector is released and the fee isn't refunded." />
         </View>
 
         {past.length ? (
@@ -87,9 +89,9 @@ export default function ReservationsScreen() {
         icon="close-circle-outline"
         title="Cancel reservation?"
         message={
-          live && reservationState(live, now) === 'upcoming'
+          live && canRefund(live, now)
             ? `The connector is released and ₹${live.feeINR} goes back to your wallet.`
-            : 'Your hold has already started, so the fee is not refunded.'
+            : `It's been more than ${FREE_CANCEL_MINS} minutes since you booked, so the fee is not refunded.`
         }
         confirmLabel="Yes, cancel"
         cancelLabel="Keep it"
@@ -104,6 +106,7 @@ export default function ReservationsScreen() {
 }
 
 function LiveCard({ r, now, onCancel }: { r: Reservation; now: number; onCancel: () => void }) {
+  const router = useRouter();
   const parts = reservationParts(r);
   if (!parts) return null;
   const { station, charger, connector } = parts;
@@ -121,7 +124,7 @@ function LiveCard({ r, now, onCancel }: { r: Reservation; now: number; onCancel:
         <Text style={styles.countdown}>{st === 'upcoming' ? `Starts in ${inWords(r.startAt - now)}` : `${inWords(end - now)} left`}</Text>
       </View>
 
-      <View style={styles.stationRow}>
+      <TouchableOpacity style={styles.stationRow} activeOpacity={0.8} onPress={() => router.push({ pathname: '/station/[id]', params: { id: station.id } })}>
         {photo ? <Image source={photo} style={styles.thumb} contentFit="cover" /> : null}
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={styles.stationName} numberOfLines={1}>
@@ -131,7 +134,8 @@ function LiveCard({ r, now, onCancel }: { r: Reservation; now: number; onCancel:
             {station.address}, {station.city}
           </Text>
         </View>
-      </View>
+        <Ionicons name="chevron-forward" size={18} color={Palette.mistLight} />
+      </TouchableOpacity>
 
       <View style={styles.facts}>
         <View style={styles.fact}>
@@ -149,10 +153,10 @@ function LiveCard({ r, now, onCancel }: { r: Reservation; now: number; onCancel:
             <Ionicons name="time-outline" size={18} color={Palette.forest} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.factMain}>
-              {dayLabel(r.startAt, now)}, {clock(r.startAt)} – {clock(end)}
+            <Text style={styles.factMain}>Held until {clock(end)}</Text>
+            <Text style={styles.factSub}>
+              Booked at {clock(r.startAt)} · {r.holdMins} min hold
             </Text>
-            <Text style={styles.factSub}>Held for {r.holdMins} minutes from your arrival time</Text>
           </View>
         </View>
       </View>
