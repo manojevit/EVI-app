@@ -5,6 +5,7 @@ import { Fragment, useState, type ReactNode } from 'react';
 import { ScrollView, Switch, Text, TouchableOpacity, View } from 'react-native';
 
 import AppHeader from '@/components/app-header';
+import LogoutDialog from '@/components/logout-dialog';
 import { scaledSheet } from '@/constants/responsive';
 import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
 
@@ -13,6 +14,7 @@ type IconName = keyof typeof Ionicons.glyphMap;
 /** Settings: notifications, language, charging preferences, about, account. */
 export default function SettingsScreen() {
   const router = useRouter();
+  const [confirmLogout, setConfirmLogout] = useState(false);
   const [prefs, setPrefs] = useState({
     chargingUpdates: true,
     lowBalance: true,
@@ -73,11 +75,12 @@ export default function SettingsScreen() {
         </Section>
 
         <Section title="Account">
-          <LinkRow icon="log-out-outline" title="Log out" onPress={() => router.replace('/login')} />
+          <LinkRow icon="log-out-outline" title="Log out" onPress={() => setConfirmLogout(true)} />
           <LinkRow icon="trash-outline" title="Delete account" danger onPress={() => router.push('/new-ticket')} />
         </Section>
         <Text style={styles.foot}>Deleting your account is handled by our team. Raise a ticket and we&apos;ll confirm by phone.</Text>
       </ScrollView>
+      <LogoutDialog visible={confirmLogout} onCancel={() => setConfirmLogout(false)} />
     </View>
   );
 }

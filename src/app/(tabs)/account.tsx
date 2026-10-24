@@ -1,10 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { Fragment } from 'react';
+import { Fragment, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 import AppHeader from '@/components/app-header';
+import LogoutDialog from '@/components/logout-dialog';
 import VoltButton from '@/components/volt-button';
 import { scaledSheet } from '@/constants/responsive';
 import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
@@ -16,6 +17,7 @@ type Item = { icon: IconName; title: string; hint: string; route: string; badge?
 
 export default function AccountScreen() {
   const router = useRouter();
+  const [confirmLogout, setConfirmLogout] = useState(false);
   const profile = useAppStore((st) => st.profile);
   const balance = useAppStore((st) => st.walletBalance);
   const history = useAppStore((st) => st.history);
@@ -105,8 +107,9 @@ export default function AccountScreen() {
           </View>
         ))}
 
-        <VoltButton label="Log out" icon="log-out-outline" variant="outline" onPress={() => router.replace('/login')} />
+        <VoltButton label="Log out" icon="log-out-outline" variant="outline" onPress={() => setConfirmLogout(true)} />
       </ScrollView>
+      <LogoutDialog visible={confirmLogout} onCancel={() => setConfirmLogout(false)} />
     </View>
   );
 }
