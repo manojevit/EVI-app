@@ -1,8 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
-import { ScrollView, Text, View } from 'react-native';
+import { ScrollView, Text, TouchableOpacity, View } from 'react-native';
 
 import AppHeader from '@/components/app-header';
 import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
+import { markNotificationsRead, useAppStore } from '@/data/app-store';
 import { NOTIFICATIONS, type AppNotification, type NotificationKind } from '@/data/mock';
 import { scaledSheet } from '@/constants/responsive';
 
@@ -18,11 +19,26 @@ const KIND: Record<NotificationKind, { icon: keyof typeof Ionicons.glyphMap; tin
 const GROUPS: AppNotification['group'][] = ['Today', 'Yesterday', 'Earlier'];
 
 export default function NotificationsScreen() {
+  const read = useAppStore((st) => st.readNotifications);
+  const isUnread = (n: AppNotification) => !!n.unread && !read.includes(n.id);
+  const unread = NOTIFICATIONS.filter(isUnread);
+
   return (
     <View style={styles.container}>
       <AppHeader back />
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Text style={styles.title}>Notifications</Text>
+        <View style={styles.titleRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.title}>Notifications</Text>
+            <Text style={styles.sub}>{unread.length ? `${unread.length} unread` : 'All caught up'}</Text>
+          </View>
+          {unread.length ? (
+            <TouchableOpacity style={styles.markBtn} activeOpacity={0.8} onPress={() => markNotificationsRead(unread.map((n) => n.id))}>
+              <Ionicons name="checkmark-done" size={16} color={Palette.forest} />
+              <Text style={styles.markText}>Mark all read</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
         {GROUPS.map((g) => {
           const items = NOTIFICATIONS.filter((n) => n.group === g);
           if (!items.length) return null;
@@ -32,7 +48,7 @@ export default function NotificationsScreen() {
               {items.map((n) => {
                 const k = KIND[n.kind];
                 return (
-                  <View key={n.id} style={[styles.card, n.unread && styles.cardUnread]}>
+                  <View key={n.id} style={[styles.card, isUnread(n) && styles.cardUnread]}>
                     <View style={[styles.iconChip, { backgroundColor: k.tint }]}>
                       <Ionicons name={k.icon} size={19} color={k.ink} />
                     </View>
@@ -42,7 +58,7 @@ export default function NotificationsScreen() {
                           {n.title}
                         </Text>
                         <Text style={styles.time}>{n.timeAgo}</Text>
-                        {n.unread ? <View style={styles.dot} accessibilityLabel="Unread" /> : null}
+                        {isUnread(n) ? <View style={styles.dot} accessibilityLabel="Unread" /> : null}
                       </View>
                       <Text style={styles.body}>{n.body}</Text>
                     </View>
@@ -60,7 +76,11 @@ export default function NotificationsScreen() {
 const styles = scaledSheet({
   container: { flex: 1, backgroundColor: Palette.canvas },
   scroll: { padding: Spacing.lg, paddingTop: Spacing.xs, paddingBottom: Spacing.xxl, gap: Spacing.lg },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
   title: { fontFamily: Font.display, fontSize: 22, color: Palette.ink },
+  sub: { fontFamily: Font.medium, fontSize: 13, color: Palette.mist, marginTop: 2 },
+  markBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, height: 36, paddingHorizontal: 14, borderRadius: Radius.pill, backgroundColor: Palette.voltSoft },
+  markText: { fontFamily: Font.semibold, fontSize: 13, color: Palette.forest },
   section: { gap: Spacing.sm },
   group: { fontFamily: Font.semibold, fontSize: 13, color: Palette.mist, marginLeft: Spacing.xs },
   card: { flexDirection: 'row', gap: Spacing.md, backgroundColor: Palette.surface, borderRadius: Radius.card, padding: Spacing.md, borderWidth: 1, borderColor: 'transparent', ...Shadow.soft },

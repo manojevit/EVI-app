@@ -62,6 +62,8 @@ interface AppState {
   signedIn: boolean;
   /** has seen onboarding once (kept after logging out) */
   onboarded: boolean;
+  /** notification ids the user has marked read */
+  readNotifications: string[];
 }
 
 export interface UserLocation {
@@ -85,6 +87,7 @@ const fresh = (): AppState => ({
   myReviews: {},
   signedIn: false,
   onboarded: false,
+  readNotifications: [],
 });
 let state: AppState = fresh();
 
@@ -100,7 +103,7 @@ const STORAGE_KEY = 'evit-app-state-v1';
 // location comes fresh from GPS each launch, so it isn't saved
 const SAVED: (keyof AppState)[] = [
   'session', 'walletBalance', 'txns', 'tickets', 'history', 'profile', 'vehicles',
-  'favourites', 'filters', 'planId', 'myReviews', 'signedIn', 'onboarded',
+  'favourites', 'filters', 'planId', 'myReviews', 'signedIn', 'onboarded', 'readNotifications',
 ];
 let hydrated = false;
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -135,6 +138,9 @@ export const hydrate: Promise<void> = (async () => {
 
 export function signIn() {
   set({ signedIn: true, onboarded: true });
+}
+export function markNotificationsRead(ids: string[]) {
+  set({ readNotifications: [...new Set([...state.readNotifications, ...ids])] });
 }
 export function finishOnboarding() {
   set({ onboarded: true });

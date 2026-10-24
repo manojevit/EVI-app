@@ -11,7 +11,7 @@ import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
-/** Settings: notifications, language, charging preferences, about, account. */
+/** Settings: notifications, language, about, account. */
 export default function SettingsScreen() {
   const router = useRouter();
   const [confirmLogout, setConfirmLogout] = useState(false);
@@ -19,8 +19,6 @@ export default function SettingsScreen() {
     chargingUpdates: true,
     lowBalance: true,
     offers: false,
-    freeOnly: false,
-    autoTopUp: false,
   });
   const [lang, setLang] = useState<'English' | 'हिन्दी'>('English');
   const [aboutOpen, setAboutOpen] = useState<string | null>(null);
@@ -48,11 +46,6 @@ export default function SettingsScreen() {
             ))}
           </View>
           {lang !== 'English' ? <Text style={styles.note}>Hindi is coming soon. The app stays in English for now.</Text> : null}
-        </Section>
-
-        <Section title="Charging">
-          <ToggleRow icon="funnel-outline" title="Show only free chargers" sub="Hide busy and offline stations on the map" value={prefs.freeOnly} onChange={() => toggle('freeOnly')} />
-          <ToggleRow icon="repeat-outline" title="Auto top-up" sub="Add ₹500 when the balance is below ₹200" value={prefs.autoTopUp} onChange={() => toggle('autoTopUp')} />
         </Section>
 
         <Section title="About">
