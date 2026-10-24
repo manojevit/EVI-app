@@ -15,6 +15,8 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from 'react-native-reanimated';
 
 import AppHeader from '@/components/app-header';
 import ConnectorIcon from '@/components/connector-icon';
@@ -66,7 +68,7 @@ const kmLabel = (km: number) => `${km < 10 ? km.toFixed(1) : Math.round(km)} km`
 export default function StationDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const scrollRef = useRef<any>(null);
   const tabsY = useRef(0);
@@ -87,11 +89,42 @@ export default function StationDetail() {
   const rating = mine ? (extras.rating * extras.reviewCount + mine.stars) / (extras.reviewCount + 1) : extras.rating;
   const ratingCount = extras.reviewCount + (mine ? 1 : 0);
 
-  const openTab = (t: Tab) => {
-    setTab(t);
+  // the open tab slides in from the side it comes from, whether tapped or swiped
+  const drag = useSharedValue(0);
+  const tabIndex = TABS.indexOf(tab);
+  const showTab = (i: number, from: number) => {
+    setTab(TABS[i]);
     // keep the tabs in view when switching from further down the page
     if (scrollY.current > tabsY.current) scrollRef.current?.scrollTo({ y: tabsY.current, animated: false });
+    drag.value = from;
+    drag.value = withTiming(0, { duration: 220 });
   };
+  const openTab = (t: Tab) => {
+    const i = TABS.indexOf(t);
+    if (i !== tabIndex) showTab(i, Math.sign(i - tabIndex) * width * 0.35);
+  };
+  // swipe left for the next tab, right for the previous one
+  const swipe = Gesture.Pan()
+    .activeOffsetX([-20, 20])
+    .failOffsetY([-14, 14])
+    .onUpdate((e) => {
+      const atEdge = (e.translationX > 0 && tabIndex === 0) || (e.translationX < 0 && tabIndex === TABS.length - 1);
+      drag.value = atEdge ? e.translationX * 0.25 : e.translationX;
+    })
+    .onEnd((e) => {
+      const dir = e.translationX < -width * 0.2 || e.velocityX < -600 ? 1 : e.translationX > width * 0.2 || e.velocityX > 600 ? -1 : 0;
+      const next = tabIndex + dir;
+      if (dir !== 0 && next >= 0 && next < TABS.length) {
+        drag.value = withTiming(-dir * width, { duration: 150 }, (done) => {
+          if (done) runOnJS(showTab)(next, dir * width);
+        });
+      } else {
+        drag.value = withSpring(0, { damping: 18, stiffness: 220 });
+      }
+    });
+  // at least a screen tall, so switching to a short tab keeps the tabs pinned at the top
+  const bodyMinH = height - s(150);
+  const slideStyle = useAnimatedStyle(() => ({ transform: [{ translateX: drag.value }] }));
 
   // Start opens a sheet: charge for a set time / until full, or reserve the connector
   const [picked, setPicked] = useState<{ charger: Charger; connector: Connector } | null>(null);
@@ -136,7 +169,12 @@ export default function StationDetail() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}>
         {/* 0: summary */}
-        <View style={styles.top}>
+        <View
+          style={styles.top}
+          onLayout={(e) => {
+            // the tabs start where the summary ends (a sticky header's own y isn't reliable)
+            tabsY.current = e.nativeEvent.layout.y + e.nativeEvent.layout.height;
+          }}>
           <Gallery photos={stationPhotos(station.id)} width={width - s(Spacing.lg) * 2} />
 
           <View style={styles.titleRow}>
@@ -175,11 +213,7 @@ export default function StationDetail() {
         </View>
 
         {/* 1: tabs (stick to the top while scrolling) */}
-        <View
-          style={styles.tabsWrap}
-          onLayout={(e) => {
-            tabsY.current = e.nativeEvent.layout.y;
-          }}>
+        <View style={styles.tabsWrap}>
           <View style={styles.tabs}>
             {TABS.map((t) => (
               <TouchableOpacity key={t} onPress={() => openTab(t)} activeOpacity={0.85} style={[styles.tab, tab === t && styles.tabOn]} accessibilityRole="tab" accessibilityState={{ selected: tab === t }}>
@@ -191,33 +225,35 @@ export default function StationDetail() {
           </View>
         </View>
 
-        {/* 2: the open tab */}
-        <View style={styles.body}>
-          {tab === 'Chargers' ? (
-            <>
-              {vehicle ? <FitBanner station={station} vehicle={vehicle} /> : null}
-              {session && session.stationId !== station.id ? (
-                <Text style={styles.busyNote} onPress={() => router.navigate('/sessions')}>
-                  You&apos;re already charging somewhere else. Stop that session to start here. <Text style={styles.busyLink}>View session</Text>
-                </Text>
-              ) : null}
-              {station.chargers.map((ch) => (
-                <ChargerCard
-                  key={ch.id}
-                  charger={ch}
-                  matches={vehicle?.connectors ?? []}
-                  activeConnectorId={session?.stationId === station.id && session.chargerId === ch.id ? session.connectorId : null}
-                  reservedConnectorId={booked?.stationId === station.id && booked.chargerId === ch.id ? booked.connectorId : null}
-                  onStart={(c) => openSheet(ch, c)}
-                  onOpenSession={() => router.navigate('/sessions')}
-                />
-              ))}
-            </>
-          ) : null}
-          {tab === 'Info' ? <InfoTab station={station} open={open} km={km} onReport={() => router.push('/new-ticket')} /> : null}
-          {tab === 'Nearby' ? <NearbyTab station={station} amenities={extras.amenities} /> : null}
-          {tab === 'Reviews' ? <ReviewsTab station={station} rating={rating} ratingCount={ratingCount} mine={mine} /> : null}
-        </View>
+        {/* 2: the open tab — swipe sideways to move between tabs */}
+        <GestureDetector gesture={swipe}>
+          <Animated.View style={[styles.body, { minHeight: bodyMinH }, slideStyle]}>
+            {tab === 'Chargers' ? (
+              <>
+                {vehicle ? <FitBanner station={station} vehicle={vehicle} /> : null}
+                {session && session.stationId !== station.id ? (
+                  <Text style={styles.busyNote} onPress={() => router.navigate('/sessions')}>
+                    You&apos;re already charging somewhere else. Stop that session to start here. <Text style={styles.busyLink}>View session</Text>
+                  </Text>
+                ) : null}
+                {station.chargers.map((ch) => (
+                  <ChargerCard
+                    key={ch.id}
+                    charger={ch}
+                    matches={vehicle?.connectors ?? []}
+                    activeConnectorId={session?.stationId === station.id && session.chargerId === ch.id ? session.connectorId : null}
+                    reservedConnectorId={booked?.stationId === station.id && booked.chargerId === ch.id ? booked.connectorId : null}
+                    onStart={(c) => openSheet(ch, c)}
+                    onOpenSession={() => router.navigate('/sessions')}
+                  />
+                ))}
+              </>
+            ) : null}
+            {tab === 'Info' ? <InfoTab station={station} open={open} km={km} onReport={() => router.push('/new-ticket')} /> : null}
+            {tab === 'Nearby' ? <NearbyTab station={station} amenities={extras.amenities} /> : null}
+            {tab === 'Reviews' ? <ReviewsTab station={station} rating={rating} ratingCount={ratingCount} mine={mine} /> : null}
+          </Animated.View>
+        </GestureDetector>
       </ScrollView>
       {picked ? (
         <StartSheet
@@ -496,14 +532,14 @@ function NearbyTab({ station, amenities }: { station: Station; amenities: Amenit
             <Text style={styles.tabNote}>{walk.length} places</Text>
           </View>
           {kinds.length > 1 ? (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow} style={styles.filterScroll}>
+            <View style={styles.filterRow}>
               {(['all', ...kinds] as const).map((k) => (
                 <TouchableOpacity key={k} onPress={() => setKind(k)} activeOpacity={0.85} style={[styles.filter, kind === k && styles.filterOn]}>
                   {k !== 'all' ? <MaterialCommunityIcons name={AMENITY[k].icon} size={14} color={kind === k ? Palette.white : AMENITY[k].ink} /> : null}
                   <Text style={[styles.filterText, kind === k && styles.filterTextOn]}>{k === 'all' ? 'All' : AMENITY[k].label}</Text>
                 </TouchableOpacity>
               ))}
-            </ScrollView>
+            </View>
           ) : null}
           <View style={styles.card}>
             {shown.map((a, i) => {
@@ -787,9 +823,7 @@ const styles = scaledSheet({
   onSiteRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
   onSite: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: Radius.pill, paddingHorizontal: 11, paddingVertical: 7 },
   onSiteText: { fontFamily: Font.semibold, fontSize: 13 },
-  // flexGrow 0: a ScrollView grows by default, which stretched the chips when a filter left the list short
-  filterScroll: { marginHorizontal: -Spacing.lg, flexGrow: 0, flexShrink: 0 },
-  filterRow: { paddingHorizontal: Spacing.lg, gap: Spacing.sm, alignItems: 'center' },
+  filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm, alignItems: 'center' },
   filter: { flexDirection: 'row', alignItems: 'center', gap: 5, height: 34, backgroundColor: Palette.surface, borderRadius: Radius.pill, borderWidth: 1, borderColor: Palette.line, paddingHorizontal: 12 },
   filterOn: { backgroundColor: Palette.ink, borderColor: Palette.ink },
   filterText: { fontFamily: Font.semibold, fontSize: 13, color: Palette.inkSoft },
