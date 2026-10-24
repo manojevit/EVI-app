@@ -19,7 +19,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import Svg, { Circle, Defs, LinearGradient as SvgGradient, Path, RadialGradient, Stop } from 'react-native-svg';
 
-import BrandLogo, { BrandLogoImage } from '@/components/brand-logo';
+import { BrandLogoFull, BrandLogoImage } from '@/components/brand-logo';
 import { Font, Palette } from '@/constants/theme';
 
 /**
@@ -57,7 +57,9 @@ const STROKE = 10;
 const R = (RING - STROKE) / 2;
 const CIRC = 2 * Math.PI * R;
 const GLOW = 460;
-const SPLASH_LOGO_H = 142; // matches the native splash (imageWidth 200)
+// Matches the native splash: full logo at imageWidth 160 (the widest that stays inside
+// Android 12+'s round splash-icon mask, so the E and "Technologies" aren't clipped).
+const SPLASH_LOGO_H = (160 * 803) / 1200;
 const DIGIT_H = 62;
 const DIGIT_W = 37;
 const BOLT_W = 96;
@@ -460,7 +462,7 @@ export default function ChargeUpIntro({ onDone }: { onDone: () => void }) {
 
         {/* splash logo (matches the native splash, then collapses) */}
         <Animated.View style={[styles.abs, logoAStyle]}>
-          <BrandLogo height={SPLASH_LOGO_H} />
+          <BrandLogoFull height={SPLASH_LOGO_H} />
         </Animated.View>
 
         {/* energy streaming in */}
