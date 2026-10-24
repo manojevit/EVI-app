@@ -11,10 +11,17 @@ import { subscribePlan, useAppStore } from '@/data/app-store';
 import { PLANS, formatINR } from '@/data/mock';
 import { scaledSheet } from '@/constants/responsive';
 
-const FEATURES: Record<string, string[]> = {
-  lite: ['20 kWh included every month', 'Works at all EVIT chargers', 'In-app support'],
-  plus: ['60 kWh included every month', 'Priority AC + DC charging', 'All chargers and faster support'],
+// pay-as-you-go tops out at ₹12/kWh, so a plan's saving is what its kWh would cost at that rate
+const PAYG_MAX = 12;
+// only what sets a plan apart; kWh and savings are worked out from the plan itself
+const EXTRAS: Record<string, string[]> = {
+  plus: ['Priority on AC and DC fast chargers'],
 };
+const features = (p: { id: string; priceINR: number; kwh: number }) => [
+  `${p.kwh} kWh every month`,
+  `Save up to ₹${p.kwh * PAYG_MAX - p.priceINR} a month`,
+  ...(EXTRAS[p.id] ?? []),
+];
 
 export default function PlansScreen() {
   const router = useRouter();
@@ -50,7 +57,7 @@ export default function PlansScreen() {
               </View>
               <Text style={styles.perKwh}>Works out to ₹{perKwh.toFixed(2)} per kWh</Text>
               <View style={styles.divider} />
-              {(FEATURES[p.id] ?? []).map((f) => (
+              {features(p).map((f) => (
                 <View key={f} style={styles.feat}>
                   <Ionicons name="checkmark-circle" size={19} color={Palette.volt} />
                   <Text style={styles.featText}>{f}</Text>

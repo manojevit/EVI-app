@@ -406,7 +406,7 @@ export interface Plan {
   scope: string;
 }
 export const PLANS: Plan[] = [
-  { id: 'lite', name: 'EVIT Lite', priceINR: 199, period: 'mo · 30d', summary: '20 kWh/month, app support', kwh: 20, scope: 'ALL' },
+  { id: 'lite', name: 'EVIT Lite', priceINR: 199, period: 'mo · 30d', summary: '20 kWh/month', kwh: 20, scope: 'ALL' },
   { id: 'plus', name: 'EVIT Plus', priceINR: 499, period: 'mo · 30d', summary: '60 kWh/month, priority AC + DC charging', kwh: 60, scope: 'ALL' },
 ];
 
