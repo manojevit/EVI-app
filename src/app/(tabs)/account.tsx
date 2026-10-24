@@ -9,10 +9,11 @@ import LogoutDialog from '@/components/logout-dialog';
 import VoltButton from '@/components/volt-button';
 import { scaledSheet } from '@/constants/responsive';
 import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
-import { useAppStore } from '@/data/app-store';
+import { setFilters, useAppStore } from '@/data/app-store';
 import { ACCOUNT, formatINR } from '@/data/mock';
 
 type IconName = keyof typeof Ionicons.glyphMap;
+
 type Item = { icon: IconName; title: string; hint: string; route: string; badge?: string };
 
 export default function AccountScreen() {
@@ -23,7 +24,12 @@ export default function AccountScreen() {
   const history = useAppStore((st) => st.history);
   const vehicleCount = useAppStore((st) => st.vehicles.length);
   const openTickets = useAppStore((st) => st.tickets.filter((t) => t.status === 'Open').length);
-  const totalKwh = history.reduce((sum, h) => sum + h.energyKwh, 0);
+  const savedStations = useAppStore((st) => st.favourites.length);
+  // saved stations: open the map showing only those
+  const openSaved = () => {
+    setFilters({ favouritesOnly: true });
+    router.navigate('/map');
+  };
   const phone = ACCOUNT.phone.replace(/^\+91(\d{5})(\d{5})$/, '+91 $1 $2');
 
   const groups: Item[][] = [
@@ -65,7 +71,10 @@ export default function AccountScreen() {
           <View style={styles.stats}>
             <Stat value={String(history.length)} label="Charges" />
             <View style={styles.statLine} />
-            <Stat value={totalKwh.toFixed(1)} label="kWh charged" />
+            <TouchableOpacity style={styles.stat} activeOpacity={0.7} onPress={openSaved} accessibilityLabel={`${savedStations} saved stations, show on map`}>
+              <Text style={styles.statValue}>{savedStations}</Text>
+              <Text style={styles.statLabel}>Saved stations</Text>
+            </TouchableOpacity>
             <View style={styles.statLine} />
             <Stat value={String(vehicleCount)} label={vehicleCount === 1 ? 'Vehicle' : 'Vehicles'} />
           </View>
