@@ -472,7 +472,7 @@ export const FAQS: Faq[] = [
   { id: 'f8', topic: 'App', q: 'The charger shows offline. What now?', a: 'Try another connector at the same station, or pick a nearby station from the map. If it stays offline, raise a ticket so we can check it.' },
 ];
 
-export const SUPPORT_CONTACT = { phone: '+91 1800 120 3848', email: 'support@evitpl.com', hours: 'Mon–Sat, 9 am – 7 pm' };
+export const SUPPORT_CONTACT = { phone: '+91 1800 120 3848', email: 'info@evitpl.com', hours: 'Mon–Sat, 9 am – 7 pm' };
 
 // Filter sheet options
 export const CATEGORIES = ['AC', 'DC'] as const;

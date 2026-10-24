@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -15,9 +16,10 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import BrandLogo from '@/components/brand-logo';
+import { BrandLogoFull } from '@/components/brand-logo';
 import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
 import { scaledSheet } from '@/constants/responsive';
+import { SUPPORT_CONTACT } from '@/data/mock';
 
 // Full-screen background from the login design: charger photo top-right fading to white.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -59,7 +61,7 @@ export default function LoginScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}>
           <View style={styles.intro}>
-            <BrandLogo height={58} />
+            <BrandLogoFull height={66} />
             <View style={styles.dash} />
             <Text style={styles.title}>Sign in</Text>
             <Text style={[styles.title, styles.titleAccent]}>to charge</Text>
@@ -110,10 +112,20 @@ export default function LoginScreen() {
               <Text style={styles.ctaText}>Get OTP</Text>
               <Ionicons name="arrow-forward" size={22} color={Palette.white} style={styles.ctaArrow} />
             </Pressable>
-            <Text style={styles.footnote}>
-              {!complete ? 'Enter all 10 digits to continue.' : !agree ? 'Tick the box above to continue.' : 'Standard SMS rates may apply.'}
-            </Text>
           </View>
+
+          <TouchableOpacity style={styles.help} activeOpacity={0.8} onPress={() => Linking.openURL(`mailto:${SUPPORT_CONTACT.email}`)}>
+            <View style={styles.helpIcon}>
+              <Ionicons name="mail-outline" size={17} color={Palette.forest} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.helpTitle}>Trouble signing in?</Text>
+              <Text style={styles.helpText}>
+                Write to us at <Text style={styles.helpLink}>{SUPPORT_CONTACT.email}</Text>
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={Palette.mistLight} />
+          </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
     </View>
@@ -125,7 +137,7 @@ const styles = scaledSheet({
   scroll: { flexGrow: 1, paddingHorizontal: 21 },
 
   intro: { paddingHorizontal: 18 },
-  dash: { width: 32, height: 4, borderRadius: 2, backgroundColor: Palette.volt, marginTop: 68, marginBottom: Spacing.lg },
+  dash: { width: 32, height: 4, borderRadius: 2, backgroundColor: Palette.volt, marginTop: 58, marginBottom: Spacing.lg },
   title: { fontFamily: Font.displaySemi, fontSize: 36, lineHeight: 42, color: Palette.ink, letterSpacing: -0.5 },
   titleAccent: { color: Palette.forest },
   subtitle: { fontFamily: Font.regular, fontSize: 15, lineHeight: 21, color: Palette.mist, marginTop: Spacing.lg },
@@ -173,5 +185,10 @@ const styles = scaledSheet({
   ctaPressed: { opacity: 0.9 },
   ctaText: { fontFamily: Font.semibold, fontSize: 18, color: Palette.white },
   ctaArrow: { position: 'absolute', right: Spacing.xxl },
-  footnote: { fontFamily: Font.regular, fontSize: 13, color: Palette.mist, textAlign: 'center', marginTop: Spacing.md },
+
+  help: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, marginTop: Spacing.lg, marginHorizontal: 4, paddingVertical: Spacing.md, paddingHorizontal: Spacing.lg, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.7)' },
+  helpIcon: { width: 34, height: 34, borderRadius: 17, backgroundColor: Palette.voltSoft, alignItems: 'center', justifyContent: 'center' },
+  helpTitle: { fontFamily: Font.semibold, fontSize: 14, color: Palette.ink },
+  helpText: { fontFamily: Font.regular, fontSize: 13, color: Palette.mist, marginTop: 1 },
+  helpLink: { fontFamily: Font.semibold, color: Palette.forest },
 });

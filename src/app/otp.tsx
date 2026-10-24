@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   Animated,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
   ScrollView,
@@ -19,6 +20,7 @@ import BrandLogo from '@/components/brand-logo';
 import VoltButton from '@/components/volt-button';
 import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
 import { scaledSheet } from '@/constants/responsive';
+import { SUPPORT_CONTACT } from '@/data/mock';
 
 const LENGTH = 6;
 const RESEND_SECONDS = 30;
@@ -140,10 +142,12 @@ export default function OtpScreen() {
 
         <View style={{ flex: 1, minHeight: Spacing.xxxl }} />
 
-        <View style={styles.note}>
-          <Ionicons name="shield-checkmark-outline" size={18} color={Palette.forest} />
-          <Text style={styles.noteText}>EVIT will never call or message you asking for this code.</Text>
-        </View>
+        <TouchableOpacity style={styles.note} activeOpacity={0.8} onPress={() => Linking.openURL(`mailto:${SUPPORT_CONTACT.email}`)}>
+          <Ionicons name="chatbubble-ellipses-outline" size={18} color={Palette.forest} />
+          <Text style={styles.noteText}>
+            Code not arriving? Check your number, or write to <Text style={styles.noteLink}>{SUPPORT_CONTACT.email}</Text>
+          </Text>
+        </TouchableOpacity>
 
         <VoltButton
           label={verifying ? 'Verifying…' : 'Verify and continue'}
@@ -188,4 +192,5 @@ const styles = scaledSheet({
 
   note: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, backgroundColor: Palette.voltSofter, borderRadius: Radius.chip, padding: Spacing.lg },
   noteText: { flex: 1, fontFamily: Font.regular, fontSize: 14, color: Palette.inkSoft, lineHeight: 20 },
+  noteLink: { fontFamily: Font.semibold, color: Palette.forest },
 });

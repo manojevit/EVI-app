@@ -8,7 +8,7 @@ import StationCard from '@/components/station-card';
 import LiveMap from '@/components/live-map';
 import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
 import { activeFilterCount, setFilters, stationMatches, useAppStore } from '@/data/app-store';
-import { STATIONS, distanceKm, maxPowerKw, stationExtras } from '@/data/mock';
+import { STATIONS, distanceKm, freeConnectorCount, maxPowerKw, stationExtras } from '@/data/mock';
 import { s, scaledSheet } from '@/constants/responsive';
 
 const SORTS = ['Nearest', 'Cheapest', 'Fastest', 'Top rated'] as const;
@@ -42,6 +42,8 @@ export default function HomeScreen() {
     return [...list].sort(by[sort]);
   }, [query, filters, favourites, sort]);
 
+  const freePlugs = stations.reduce((n, st) => n + freeConnectorCount(st), 0);
+  const fastest = stations.reduce((m, st) => Math.max(m, maxPowerKw(st)), 0);
   const topPad = insets.top + Spacing.sm;
 
   return (
@@ -50,14 +52,30 @@ export default function HomeScreen() {
         <FlatList
           data={stations}
           keyExtractor={(st) => st.id}
-          renderItem={({ item }) => <StationCard station={item} />}
-          contentContainerStyle={{ paddingTop: topPad + s(124), paddingHorizontal: s(Spacing.lg), paddingBottom: s(150), gap: s(Spacing.md) }}
+          renderItem={({ item, index }) => <StationCard station={item} index={index} />}
+          contentContainerStyle={{ paddingTop: topPad + s(124), paddingHorizontal: s(Spacing.lg), paddingBottom: s(150), gap: s(Spacing.lg) }}
           showsVerticalScrollIndicator={false}
           ListHeaderComponent={
             <View style={styles.listHead}>
-              <Text style={styles.count}>
-                {stations.length} {stations.length === 1 ? 'station' : 'stations'}
-              </Text>
+              <View style={styles.summary}>
+                <View style={styles.summaryItem}>
+                  <Text style={styles.summaryValue}>{stations.length}</Text>
+                  <Text style={styles.summaryLabel}>{stations.length === 1 ? 'station' : 'stations'}</Text>
+                </View>
+                <View style={styles.summaryLine} />
+                <View style={styles.summaryItem}>
+                  <View style={styles.liveRow}>
+                    <View style={styles.liveDot} />
+                    <Text style={styles.summaryValue}>{freePlugs}</Text>
+                  </View>
+                  <Text style={styles.summaryLabel}>plugs free now</Text>
+                </View>
+                <View style={styles.summaryLine} />
+                <View style={styles.summaryItem}>
+                  <Text style={styles.summaryValue}>{fastest} kW</Text>
+                  <Text style={styles.summaryLabel}>fastest</Text>
+                </View>
+              </View>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sorts}>
                 {SORTS.map((o) => (
                   <TouchableOpacity key={o} onPress={() => setSort(o)} activeOpacity={0.85} style={[styles.sort, sort === o && styles.sortOn]}>
@@ -80,8 +98,8 @@ export default function HomeScreen() {
           key={recenter}
           pins={stations.map((st) => ({ id: st.id, latitude: st.latitude, longitude: st.longitude, available: st.status === 'Available' }))}
           // keep pins clear of the search bar + chips above and the tab bar below
-          // (+52 on top: padding counts to a pin's tip, and the pin head is ~52pt tall)
-          padding={{ top: topPad + s(150) + 52, bottom: s(130), left: s(40), right: s(40) }}
+          // (+46 on top: padding counts to a pin's tip, and the logo pin is 46pt tall)
+          padding={{ top: topPad + s(150) + 46, bottom: s(130), left: s(46), right: s(46) }}
           onPinPress={(id) => router.push(`/station/${id}`)}
         />
       )}
@@ -217,8 +235,14 @@ const styles = scaledSheet({
 
   badge: { position: 'absolute', top: 6, right: 6, minWidth: 17, height: 17, borderRadius: 9, backgroundColor: Palette.amber, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
   badgeText: { fontFamily: Font.bold, fontSize: 10, color: Palette.white },
-  listHead: { gap: Spacing.sm, marginBottom: Spacing.xs },
-  count: { fontFamily: Font.semibold, fontSize: 13, color: Palette.mist },
+  listHead: { gap: Spacing.md, marginBottom: Spacing.xs },
+  summary: { flexDirection: 'row', alignItems: 'center', backgroundColor: Palette.surface, borderRadius: Radius.card, paddingVertical: Spacing.md, borderWidth: 1, borderColor: Palette.brandTint2, ...Shadow.soft },
+  summaryItem: { flex: 1, alignItems: 'center', gap: 1 },
+  summaryValue: { fontFamily: Font.display, fontSize: 19, color: Palette.ink },
+  summaryLabel: { fontFamily: Font.medium, fontSize: 12, color: Palette.mist },
+  summaryLine: { width: 1, height: 30, backgroundColor: Palette.line },
+  liveRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Palette.volt },
   sorts: { gap: Spacing.sm },
   sort: { paddingHorizontal: Spacing.md, paddingVertical: 7, borderRadius: Radius.pill, backgroundColor: Palette.surface, borderWidth: 1, borderColor: Palette.line },
   sortOn: { backgroundColor: Palette.ink, borderColor: Palette.ink },
