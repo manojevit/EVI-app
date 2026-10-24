@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Font, Palette, Radius, Spacing } from '@/constants/theme';
+import { Font, Palette, Spacing } from '@/constants/theme';
 import { scaledSheet } from '@/constants/responsive';
 
 type TabRoute = { key: string; name: string };
@@ -64,18 +64,20 @@ const styles = scaledSheet({
   bar: {
     flexDirection: 'row',
     backgroundColor: Palette.surface,
-    paddingTop: Spacing.sm,
+    paddingTop: 10,
     paddingHorizontal: Spacing.md,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Palette.line,
+    // rounded top edge, lifted by a soft shadow instead of a hard line
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
     shadowColor: '#0B2416',
-    shadowOpacity: 0.06,
+    shadowOpacity: 0.08,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: -4 },
     elevation: 12,
   },
   tab: { flex: 1, alignItems: 'center', gap: 3 },
-  pill: { width: 58, height: 32, borderRadius: Radius.pill, alignItems: 'center', justifyContent: 'center' },
+  // explicit radius = half the height, so the highlight is a true capsule on every Android version
+  pill: { width: 64, height: 34, borderRadius: 17, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
   pillOn: { backgroundColor: Palette.forest },
   label: { fontFamily: Font.medium, fontSize: 12, color: Palette.mist },
   labelOn: { fontFamily: Font.bold, color: Palette.forest },
