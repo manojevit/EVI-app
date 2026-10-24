@@ -24,7 +24,7 @@ import VoltButton from '@/components/volt-button';
 import { s, scaledSheet, useAppWidth } from '@/constants/responsive';
 import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
 import { RESERVATION_FEE, liveReservation, reserve, startSession, submitReview, toggleFavourite, useAppStore } from '@/data/app-store';
-import { CONNECTORS, type ConnectorKey } from '@/data/connectors';
+import { CONNECTORS } from '@/data/connectors';
 import {
   STATIONS,
   directionsUrl,
@@ -233,7 +233,6 @@ export default function StationDetail() {
           <Animated.View style={[styles.body, { minHeight: bodyMinH }, slideStyle]}>
             {tab === 'Chargers' ? (
               <>
-                {vehicle ? <FitBanner station={station} vehicle={vehicle} /> : null}
                 {session && session.stationId !== station.id ? (
                   <Text style={styles.busyNote} onPress={() => router.navigate('/sessions')}>
                     You&apos;re already charging somewhere else. Stop that session to start here. <Text style={styles.busyLink}>View session</Text>
@@ -327,29 +326,6 @@ function Gallery({ photos, width }: { photos: StationPhoto[]; width: number }) {
 }
 
 // ---------- Chargers tab ----------
-
-function FitBanner({ station, vehicle }: { station: Station; vehicle: { model: string; connectors: string[] } }) {
-  const freeTypes = new Set(stationConnectors(station).filter((c) => c.availability === 'Available').map((c) => c.type as string));
-  const anyTypes = new Set(stationConnectors(station).map((c) => c.type as string));
-  const fitsNow = vehicle.connectors.filter((k) => freeTypes.has(k));
-  const fitsAtAll = vehicle.connectors.some((k) => anyTypes.has(k));
-  return (
-    <View style={[styles.fit, fitsNow.length ? styles.fitOk : fitsAtAll ? styles.fitBusy : styles.fitNo]}>
-      <Ionicons
-        name={fitsNow.length ? 'checkmark-circle' : fitsAtAll ? 'time' : 'close-circle'}
-        size={20}
-        color={fitsNow.length ? Palette.forest : fitsAtAll ? Palette.amber : Palette.red}
-      />
-      <Text style={styles.fitText}>
-        {fitsNow.length
-          ? `Fits your ${vehicle.model}: ${fitsNow.map((k) => CONNECTORS[k as ConnectorKey].label).join(' and ')} free`
-          : fitsAtAll
-            ? `Your ${vehicle.model}'s connectors are busy here right now`
-            : `No connector for your ${vehicle.model} here`}
-      </Text>
-    </View>
-  );
-}
 
 function ChargerCard({
   charger,
@@ -807,11 +783,6 @@ const styles = scaledSheet({
   tabNote: { fontFamily: Font.medium, fontSize: 13, color: Palette.mist },
   emptyText: { fontFamily: Font.regular, fontSize: 14, color: Palette.mist, textAlign: 'center', paddingVertical: Spacing.xxl },
 
-  fit: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, borderRadius: Radius.chip, paddingHorizontal: Spacing.md, paddingVertical: Spacing.md },
-  fitOk: { backgroundColor: Palette.voltSoft },
-  fitBusy: { backgroundColor: Palette.amberSoft },
-  fitNo: { backgroundColor: Palette.redSoft },
-  fitText: { flex: 1, fontFamily: Font.semibold, fontSize: 13, color: Palette.ink, lineHeight: 18 },
   busyLink: { fontFamily: Font.bold, color: Palette.amberDeep, textDecorationLine: 'underline' },
   busyNote: { fontFamily: Font.regular, fontSize: 13, color: Palette.amberDeep, backgroundColor: Palette.amberSoft, borderRadius: Radius.chip, padding: Spacing.md, overflow: 'hidden' },
 
