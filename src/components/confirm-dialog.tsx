@@ -11,6 +11,7 @@ export default function ConfirmDialog({
   title,
   message,
   confirmLabel,
+  cancelLabel = 'Cancel',
   danger = true,
   onConfirm,
   onCancel,
@@ -20,6 +21,8 @@ export default function ConfirmDialog({
   title: string;
   message: string;
   confirmLabel: string;
+  /** label for the button that closes without acting */
+  cancelLabel?: string;
   danger?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
@@ -37,7 +40,7 @@ export default function ConfirmDialog({
           <Text style={styles.message}>{message}</Text>
           <View style={styles.buttons}>
             <TouchableOpacity style={[styles.btn, styles.cancel]} onPress={onCancel} activeOpacity={0.8}>
-              <Text style={styles.cancelText}>Cancel</Text>
+              <Text style={styles.cancelText}>{cancelLabel}</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.btn, { backgroundColor: tone }]} onPress={onConfirm} activeOpacity={0.85}>
               <Text style={styles.confirmText}>{confirmLabel}</Text>

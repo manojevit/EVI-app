@@ -34,6 +34,32 @@ export interface LiveSession {
   startSoc: number | null;
 }
 
+export interface Reservation {
+  id: string;
+  stationId: string;
+  chargerId: string;
+  connectorId: string;
+  /** when the hold starts (the driver's arrival time) */
+  startAt: number;
+  holdMins: 15 | 30;
+  feeINR: number;
+  /** 'booked' turns into upcoming / held / expired by the clock — see reservationState */
+  status: 'booked' | 'used' | 'cancelled';
+}
+export type ReservationState = 'upcoming' | 'held' | 'expired' | 'used' | 'cancelled';
+export const RESERVATION_FEE = 30;
+
+export interface RfidCard {
+  id: string;
+  /** chip id printed on the back of the card, hex without spaces (empty while an ordered card is on its way) */
+  uid: string;
+  name: string;
+  status: 'active' | 'blocked' | 'ordered';
+  vehicleId?: string;
+  addedLabel: string;
+}
+export const RFID_CARD_PRICE = 199;
+
 export interface MapFilters {
   favouritesOnly: boolean;
   availableNow: boolean;
@@ -64,6 +90,8 @@ interface AppState {
   onboarded: boolean;
   /** notification ids the user has marked read */
   readNotifications: string[];
+  reservations: Reservation[];
+  rfidCards: RfidCard[];
 }
 
 export interface UserLocation {
@@ -88,7 +116,19 @@ const fresh = (): AppState => ({
   signedIn: false,
   onboarded: false,
   readNotifications: [],
+  reservations: demoReservations(),
+  rfidCards: [{ id: 'rf1', uid: '04A13F9C2B7E81', name: 'My EVIT card', status: 'active', vehicleId: 'v1', addedLabel: 'Added 12 Oct 2026' }],
 });
+
+// a few past bookings so the history isn't empty on a fresh install
+function demoReservations(): Reservation[] {
+  const at = (iso: string) => new Date(iso).getTime();
+  return [
+    { id: 'rs3', stationId: 'demo-hub-north', chargerId: 'ch1', connectorId: 'c1', startAt: at('2026-10-21T18:30:00+05:30'), holdMins: 30, feeINR: RESERVATION_FEE, status: 'used' },
+    { id: 'rs2', stationId: 'evi-test-1', chargerId: 'ch2', connectorId: 'c1', startAt: at('2026-10-17T09:15:00+05:30'), holdMins: 15, feeINR: RESERVATION_FEE, status: 'booked' },
+    { id: 'rs1', stationId: 'evi-test-1', chargerId: 'ch2', connectorId: 'c1', startAt: at('2026-10-12T13:00:00+05:30'), holdMins: 30, feeINR: RESERVATION_FEE, status: 'cancelled' },
+  ];
+}
 let state: AppState = fresh();
 
 const listeners = new Set<() => void>();
@@ -103,7 +143,7 @@ const STORAGE_KEY = 'evit-app-state-v1';
 // location comes fresh from GPS each launch, so it isn't saved
 const SAVED: (keyof AppState)[] = [
   'session', 'walletBalance', 'txns', 'tickets', 'history', 'profile', 'vehicles',
-  'favourites', 'filters', 'planId', 'myReviews', 'signedIn', 'onboarded', 'readNotifications',
+  'favourites', 'filters', 'planId', 'myReviews', 'signedIn', 'onboarded', 'readNotifications', 'reservations', 'rfidCards',
 ];
 let hydrated = false;
 let saveTimer: ReturnType<typeof setTimeout> | null = null;
@@ -207,7 +247,13 @@ export const formatDuration = (sec: number) => {
 export function startSession(stationId: string, chargerId: string, connectorId: string) {
   const station = STATIONS.find((x) => x.id === stationId);
   const charger = station?.chargers.find((c) => c.id === chargerId);
+  const now = Date.now();
   set({
+    reservations: state.reservations.map((r) =>
+      r.stationId === stationId && r.chargerId === chargerId && r.connectorId === connectorId && ['upcoming', 'held'].includes(reservationState(r, now))
+        ? { ...r, status: 'used' as const }
+        : r,
+    ),
     session: {
       stationId,
       chargerId,
@@ -333,4 +379,74 @@ export function submitReview(stationId: string, r: { stars: number; text: string
     tags: r.tags,
   };
   set({ myReviews: { ...state.myReviews, [stationId]: review } });
+}
+
+// ---- reservations ----
+export function reservationState(r: Reservation, now = Date.now()): ReservationState {
+  if (r.status !== 'booked') return r.status;
+  if (now < r.startAt) return 'upcoming';
+  return now < r.startAt + r.holdMins * 60000 ? 'held' : 'expired';
+}
+/** The one booking that's still ahead or being held, if any. */
+export const liveReservation = (list: Reservation[], now = Date.now()) =>
+  list.find((r) => ['upcoming', 'held'].includes(reservationState(r, now))) ?? null;
+
+const shortDate = (t: number) =>
+  new Date(t).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false });
+
+/** Books a connector; the fee comes from the wallet. Returns why it failed, or null. */
+export function reserve(r: Omit<Reservation, 'id' | 'feeINR' | 'status'>): 'balance' | 'exists' | null {
+  if (liveReservation(state.reservations)) return 'exists';
+  if (state.walletBalance < RESERVATION_FEE) return 'balance';
+  const station = STATIONS.find((s) => s.id === r.stationId);
+  set({
+    reservations: [{ ...r, id: `rs${Date.now()}`, feeINR: RESERVATION_FEE, status: 'booked' }, ...state.reservations],
+    walletBalance: +(state.walletBalance - RESERVATION_FEE).toFixed(2),
+    txns: [{ id: `w${Date.now()}`, kind: 'charge', title: `Reservation · ${station?.name ?? ''}`, dateLabel: shortDate(Date.now()), amount: -RESERVATION_FEE }, ...state.txns],
+  });
+  return null;
+}
+
+/** Cancels a booking; the fee comes back if the slot hasn't started yet. */
+export function cancelReservation(id: string) {
+  const r = state.reservations.find((x) => x.id === id);
+  if (!r) return;
+  const refund = reservationState(r) === 'upcoming';
+  set({
+    reservations: state.reservations.map((x) => (x.id === id ? { ...x, status: 'cancelled' as const } : x)),
+    ...(refund
+      ? {
+          walletBalance: +(state.walletBalance + r.feeINR).toFixed(2),
+          txns: [{ id: `w${Date.now()}`, kind: 'refund' as const, title: 'Reservation refund', dateLabel: shortDate(Date.now()), amount: r.feeINR }, ...state.txns],
+        }
+      : {}),
+  });
+}
+
+// ---- RFID cards ----
+/** "04A13F9C2B7E81" → "04A1 3F9C 2B7E 81" */
+export const formatUid = (uid: string) => uid.match(/.{1,4}/g)?.join(' ') ?? '';
+const today = () => new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+
+export function addRfidCard(c: { uid: string; name: string; vehicleId?: string }) {
+  set({ rfidCards: [...state.rfidCards, { ...c, id: `rf${Date.now()}`, status: 'active', addedLabel: `Added ${today()}` }] });
+}
+export function setRfidStatus(id: string, status: 'active' | 'blocked') {
+  set({ rfidCards: state.rfidCards.map((c) => (c.id === id ? { ...c, status } : c)) });
+}
+export function removeRfidCard(id: string) {
+  set({ rfidCards: state.rfidCards.filter((c) => c.id !== id) });
+}
+/** Orders a new card, paid from the wallet. Returns false if the balance is too low. */
+export function orderRfidCard(): boolean {
+  if (state.walletBalance < RFID_CARD_PRICE) return false;
+  set({
+    rfidCards: [
+      ...state.rfidCards,
+      { id: `rf${Date.now()}`, uid: '', name: 'New EVIT card', status: 'ordered', vehicleId: state.vehicles[0]?.id, addedLabel: `Ordered ${today()}` },
+    ],
+    walletBalance: +(state.walletBalance - RFID_CARD_PRICE).toFixed(2),
+    txns: [{ id: `w${Date.now()}`, kind: 'plan', title: 'EVIT RFID card', dateLabel: shortDate(Date.now()), amount: -RFID_CARD_PRICE }, ...state.txns],
+  });
+  return true;
 }

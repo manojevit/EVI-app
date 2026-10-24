@@ -79,6 +79,10 @@ export default function RootLayout() {
           <Stack.Screen name="receipt/[id]" />
           <Stack.Screen name="settings" />
           <Stack.Screen name="wallet" />
+          <Stack.Screen name="reservations" />
+          <Stack.Screen name="reserve" />
+          <Stack.Screen name="rfid" />
+          <Stack.Screen name="add-rfid" options={{ presentation: 'transparentModal', animation: 'slide_from_bottom' }} />
           <Stack.Screen name="scan" />
           <Stack.Screen name="filters" options={{ presentation: 'transparentModal', animation: 'fade' }} />
           <Stack.Screen name="add-vehicle" options={{ presentation: 'transparentModal', animation: 'slide_from_bottom' }} />

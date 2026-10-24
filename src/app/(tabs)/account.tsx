@@ -9,11 +9,11 @@ import LogoutDialog from '@/components/logout-dialog';
 import VoltButton from '@/components/volt-button';
 import { scaledSheet } from '@/constants/responsive';
 import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
-import { setFilters, useAppStore } from '@/data/app-store';
+import { liveReservation, setFilters, useAppStore } from '@/data/app-store';
 import { ACCOUNT, formatINR } from '@/data/mock';
+import { clock, dayLabel } from '@/data/reservation-helpers';
 
 type IconName = keyof typeof Ionicons.glyphMap;
-
 type Item = { icon: IconName; title: string; hint: string; route: string; badge?: string };
 
 export default function AccountScreen() {
@@ -25,6 +25,9 @@ export default function AccountScreen() {
   const vehicleCount = useAppStore((st) => st.vehicles.length);
   const openTickets = useAppStore((st) => st.tickets.filter((t) => t.status === 'Open').length);
   const savedStations = useAppStore((st) => st.favourites.length);
+  const reservations = useAppStore((st) => st.reservations);
+  const activeCards = useAppStore((st) => st.rfidCards.filter((c) => c.status === 'active').length);
+  const booked = liveReservation(reservations);
   // saved stations: open the map showing only those
   const openSaved = () => {
     setFilters({ favouritesOnly: true });
@@ -34,8 +37,18 @@ export default function AccountScreen() {
 
   const groups: Item[][] = [
     [
-      { icon: 'car-sport-outline', title: 'My vehicles', hint: `${vehicleCount} saved`, route: '/vehicles' },
+      {
+        icon: 'calendar-outline',
+        title: 'Reservations',
+        hint: booked ? `${dayLabel(booked.startAt)}, ${clock(booked.startAt)}` : 'Hold a charger before you arrive',
+        route: '/reservations',
+        badge: booked ? '1 upcoming' : undefined,
+      },
+      { icon: 'card-outline', title: 'RFID cards', hint: activeCards ? `${activeCards} active ${activeCards === 1 ? 'card' : 'cards'}` : 'Charge without your phone', route: '/rfid' },
       { icon: 'time-outline', title: 'Charging history', hint: 'Receipts for every charge', route: '/history' },
+    ],
+    [
+      { icon: 'car-sport-outline', title: 'My vehicles', hint: `${vehicleCount} saved`, route: '/vehicles' },
       { icon: 'ribbon-outline', title: 'Subscription', hint: 'Save on every kWh', route: '/plans' },
     ],
     [
