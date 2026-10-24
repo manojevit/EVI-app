@@ -55,7 +55,6 @@ const AMENITY: Record<AmenityKind, { icon: keyof typeof MaterialCommunityIcons.g
 };
 const WALK_M_PER_MIN = 80;
 const SLIDE_MS = 3500;
-const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const STAR_WORDS = ['', 'Poor', 'Below average', 'Okay', 'Good', 'Excellent'];
 const GOOD_TAGS = ['Fast charging', 'Easy to find', 'Clean & safe', 'Fair price', 'Helpful staff'];
 const BAD_TAGS = ['Slow charging', 'Hard to find', 'Connector problem', 'Long wait', 'Not clean'];
@@ -395,10 +394,7 @@ function InfoTab({
   from: { latitude: number; longitude: number };
   onReport: () => void;
 }) {
-  const today = (new Date().getDay() + 6) % 7; // Monday = 0
-  const allDay = station.hours === '24 Hours';
-  // count each connector type on site
-  const counts = stationConnectors(station).reduce<Partial<Record<ConnectorKey, number>>>((m, c) => ({ ...m, [c.type]: (m[c.type] ?? 0) + 1 }), {});
+  const types = [...new Set(stationConnectors(station).map((c) => c.type))];
 
   return (
     <>
@@ -413,89 +409,58 @@ function InfoTab({
             padding={{ top: 60, bottom: 20, left: 40, right: 40 }}
           />
         </View>
-        <View style={styles.cardPad}>
-          <Text style={styles.infoTitle}>
-            {station.address}, {station.city}
-          </Text>
-          <Text style={styles.infoSub}>{kmLabel(km)} from you</Text>
-          <TouchableOpacity style={styles.outlineBtn} onPress={() => Linking.openURL(directionsUrl(station))} activeOpacity={0.8}>
-            <Ionicons name="navigate-outline" size={16} color={Palette.forest} />
-            <Text style={styles.outlineText}>Get directions</Text>
+        <View style={styles.whereRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.infoTitle}>
+              {station.address}, {station.city}
+            </Text>
+            <Text style={styles.infoSub}>{kmLabel(km)} from you</Text>
+          </View>
+          <TouchableOpacity style={styles.dirBtn} onPress={() => Linking.openURL(directionsUrl(station))} activeOpacity={0.8} accessibilityLabel="Get directions">
+            <Ionicons name="navigate" size={18} color={Palette.white} />
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* when */}
-      <View style={[styles.card, styles.cardPad]}>
-        <View style={styles.cardHead}>
-          <Text style={styles.cardTitle}>Opening hours</Text>
-          <Text style={[styles.statusPill, open ? styles.statusOpen : styles.statusClosed]}>{open ? 'Open now' : 'Closed now'}</Text>
-        </View>
-        {DAYS.map((d, i) => (
-          <View key={d} style={[styles.dayRow, i === today && styles.dayToday]}>
-            <Text style={[styles.dayName, i === today && styles.dayStrong]}>{i === today ? `${d} (today)` : d}</Text>
-            <Text style={[styles.dayHours, i === today && styles.dayStrong]}>{allDay ? 'Open 24 hours' : station.hours}</Text>
-          </View>
-        ))}
-      </View>
-
-      {/* price */}
-      <View style={[styles.card, styles.cardPad]}>
-        <Text style={styles.cardTitle}>Price &amp; payment</Text>
-        <View style={styles.priceRow}>
-          <Text style={styles.priceBig}>₹{station.pricePerKwh}</Text>
-          <Text style={styles.priceUnit}>per kWh</Text>
-        </View>
-        <Text style={styles.infoSub}>You pay only for the energy your car takes, with a receipt after every charge.</Text>
-        <View style={styles.payRow}>
-          {[
-            { icon: 'phone-portrait-outline', label: 'UPI' },
-            { icon: 'card-outline', label: 'Card' },
-            { icon: 'wallet-outline', label: 'EVIT wallet' },
-          ].map((p) => (
-            <View key={p.label} style={styles.payPill}>
-              <Ionicons name={p.icon as keyof typeof Ionicons.glyphMap} size={15} color={Palette.forest} />
-              <Text style={styles.payText}>{p.label}</Text>
-            </View>
-          ))}
-        </View>
-      </View>
-
-      {/* connectors */}
-      <View style={[styles.card, styles.cardPad]}>
-        <Text style={styles.cardTitle}>Connectors here</Text>
-        <View style={styles.connGrid}>
-          {(Object.keys(counts) as ConnectorKey[]).map((k) => (
-            <View key={k} style={styles.connTile}>
-              <ConnectorIcon type={k} size={40} original />
-              <Text style={styles.connTileLabel} numberOfLines={1}>
-                {CONNECTORS[k].label}
-              </Text>
-              <Text style={styles.connTileCount}>
-                {counts[k]} × {CONNECTORS[k].current}
-              </Text>
-            </View>
-          ))}
-        </View>
-      </View>
-
-      {/* about */}
+      {/* the essentials, one line each */}
       <View style={styles.card}>
-        <View style={styles.aboutRow}>
-          <Ionicons name="business-outline" size={18} color={Palette.forest} />
-          <Text style={styles.aboutText}>Operated by EVI Technologies</Text>
-        </View>
-        <View style={[styles.aboutRow, styles.aboutDivider]}>
-          <Ionicons name="pricetag-outline" size={18} color={Palette.forest} />
-          <Text style={styles.aboutText}>Station ID {station.id.toUpperCase()}</Text>
-        </View>
-        <TouchableOpacity style={[styles.aboutRow, styles.aboutDivider]} onPress={onReport} activeOpacity={0.7}>
-          <Ionicons name="alert-circle-outline" size={18} color={Palette.red} />
-          <Text style={[styles.aboutText, { color: Palette.red, flex: 1 }]}>Report a problem with this station</Text>
-          <Ionicons name="chevron-forward" size={17} color={Palette.mistLight} />
-        </TouchableOpacity>
+        <InfoRow icon="time-outline" label="Hours">
+          <Text style={styles.infoValue}>
+            {station.hours === '24 Hours' ? 'Open 24 hours' : station.hours} ·{' '}
+            <Text style={{ color: open ? Palette.forest : Palette.red }}>{open ? 'Open now' : 'Closed now'}</Text>
+          </Text>
+        </InfoRow>
+        <InfoRow icon="pricetag-outline" label="Price">
+          <Text style={styles.infoValue}>₹{station.pricePerKwh} per kWh</Text>
+        </InfoRow>
+        <InfoRow icon="wallet-outline" label="Pay with">
+          <Text style={styles.infoValue}>UPI, card or EVIT wallet</Text>
+        </InfoRow>
+        <InfoRow icon="flash-outline" label="Connectors" last>
+          <View style={styles.typeIcons}>
+            {types.map((k) => (
+              <ConnectorIcon key={k} type={k} size={24} original />
+            ))}
+          </View>
+        </InfoRow>
       </View>
+
+      <TouchableOpacity style={styles.reportRow} onPress={onReport} activeOpacity={0.7}>
+        <Ionicons name="alert-circle-outline" size={18} color={Palette.red} />
+        <Text style={styles.reportText}>Report a problem with this station</Text>
+        <Ionicons name="chevron-forward" size={17} color={Palette.mistLight} />
+      </TouchableOpacity>
     </>
+  );
+}
+
+function InfoRow({ icon, label, last, children }: { icon: keyof typeof Ionicons.glyphMap; label: string; last?: boolean; children: React.ReactNode }) {
+  return (
+    <View style={[styles.infoRow, !last && styles.infoDivider]}>
+      <Ionicons name={icon} size={19} color={Palette.forest} />
+      <Text style={styles.infoLabel}>{label}</Text>
+      <View style={styles.infoRight}>{children}</View>
+    </View>
   );
 }
 
@@ -822,29 +787,16 @@ const styles = scaledSheet({
 
   // info
   mapBox: { height: 150, backgroundColor: Palette.canvasDeep },
-  outlineBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: Spacing.sm, borderWidth: 1.5, borderColor: Palette.brandTint2, borderRadius: Radius.pill, paddingVertical: 10 },
-  outlineText: { fontFamily: Font.bold, fontSize: 14, color: Palette.forest },
-  statusPill: { fontFamily: Font.bold, fontSize: 12, borderRadius: Radius.pill, paddingHorizontal: 9, paddingVertical: 3, overflow: 'hidden' },
-  statusOpen: { color: Palette.forest, backgroundColor: Palette.voltSoft },
-  statusClosed: { color: Palette.red, backgroundColor: Palette.redSoft },
-  dayRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6, paddingHorizontal: Spacing.sm, borderRadius: 10 },
-  dayToday: { backgroundColor: Palette.voltSofter },
-  dayName: { fontFamily: Font.regular, fontSize: 14, color: Palette.inkSoft },
-  dayHours: { fontFamily: Font.medium, fontSize: 14, color: Palette.inkSoft },
-  dayStrong: { fontFamily: Font.bold, color: Palette.ink },
-  priceRow: { flexDirection: 'row', alignItems: 'baseline', gap: 6 },
-  priceBig: { fontFamily: Font.display, fontSize: 30, color: Palette.forest },
-  priceUnit: { fontFamily: Font.semibold, fontSize: 14, color: Palette.mist },
-  payRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm, marginTop: Spacing.xs },
-  payPill: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: Palette.voltSofter, borderRadius: Radius.pill, paddingHorizontal: 11, paddingVertical: 7 },
-  payText: { fontFamily: Font.semibold, fontSize: 13, color: Palette.ink },
-  connGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm, marginTop: Spacing.xs },
-  connTile: { flexBasis: '30%', flexGrow: 1, alignItems: 'center', gap: 4, backgroundColor: Palette.surfaceAlt, borderRadius: 16, borderWidth: 1, borderColor: Palette.lineSoft, paddingVertical: Spacing.md, paddingHorizontal: 6 },
-  connTileLabel: { fontFamily: Font.semibold, fontSize: 12, color: Palette.ink },
-  connTileCount: { fontFamily: Font.medium, fontSize: 11, color: Palette.mist },
-  aboutRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md },
-  aboutDivider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: Palette.line },
-  aboutText: { fontFamily: Font.medium, fontSize: 14, color: Palette.inkSoft },
+  whereRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, padding: Spacing.lg },
+  dirBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: Palette.forest, alignItems: 'center', justifyContent: 'center' },
+  infoRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, paddingHorizontal: Spacing.lg, paddingVertical: 14 },
+  infoDivider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Palette.line },
+  infoLabel: { fontFamily: Font.medium, fontSize: 14, color: Palette.mist, width: 86 },
+  infoRight: { flex: 1, alignItems: 'flex-end' },
+  infoValue: { fontFamily: Font.semibold, fontSize: 14, color: Palette.ink, textAlign: 'right' },
+  typeIcons: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 8 },
+  reportRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingHorizontal: Spacing.xs, paddingVertical: Spacing.sm },
+  reportText: { flex: 1, fontFamily: Font.semibold, fontSize: 14, color: Palette.red },
 
   // nearby
   onSiteRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
