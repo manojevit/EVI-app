@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ConnectorIcon from '@/components/connector-icon';
 import { APP_MAX_WIDTH, scaledSheet } from '@/constants/responsive';
 import { Font, Palette, Radius, Spacing } from '@/constants/theme';
-import { FREE_CANCEL_MINS, RESERVATION_FEE, TIME_OPTIONS } from '@/data/app-store';
+import { DEFAULT_HOLD_MINS, FREE_CANCEL_MINS, HOLD_OPTIONS, MAX_RESERVATIONS_PER_DAY, RESERVATION_FEE, TIME_OPTIONS } from '@/data/app-store';
 import { CONNECTORS } from '@/data/connectors';
 import type { Charger, Connector, Station } from '@/data/mock';
 import { clock } from '@/data/reservation-helpers';
@@ -15,7 +15,7 @@ type Mode = 'time' | 'full';
 
 /**
  * Opens when a connector's Start is tapped: charge for a set time or until full.
- * "Reserve now" switches the sheet to a reservation view (hold it for 15–60 min).
+ * "Reserve now" switches the sheet to a reservation view (hold it for 10–30 min).
  */
 export default function StartSheet({
   station,
@@ -41,11 +41,11 @@ export default function StartSheet({
   const [view, setView] = useState<'start' | 'reserve'>('start');
   const [mode, setMode] = useState<Mode>('time');
   const [mins, setMins] = useState<number>(30);
-  const [hold, setHold] = useState<number>(30);
+  const [hold, setHold] = useState<number>(DEFAULT_HOLD_MINS);
   const label = CONNECTORS[connector.type].label;
 
   const openReserve = () => {
-    setHold(mode === 'time' ? mins : 30);
+    setHold(DEFAULT_HOLD_MINS);
     setView('reserve');
   };
 
@@ -94,7 +94,7 @@ export default function StartSheet({
               </View>
 
               {mode === 'time' ? (
-                <MinuteChips value={mins} onChange={setMins} />
+                <MinuteChips options={TIME_OPTIONS} value={mins} onChange={setMins} />
               ) : (
                 <View style={styles.fullNote}>
                   <Ionicons name="battery-full" size={19} color={Palette.forest} />
@@ -149,19 +149,20 @@ export default function StartSheet({
               </View>
 
               <Text style={styles.section}>Hold it for</Text>
-              <MinuteChips value={hold} onChange={setHold} />
+              <MinuteChips options={HOLD_OPTIONS} value={hold} onChange={setHold} />
 
               <View style={styles.holdBox}>
                 <Ionicons name="time-outline" size={20} color={Palette.forest} />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.holdMain}>Held for you until {clock(Date.now() + hold * 60000)}</Text>
-                  <Text style={styles.holdSub}>No one else can start on it until then.</Text>
+                  <Text style={styles.holdSub}>Not plugged in by then? It&apos;s released for other drivers.</Text>
                 </View>
               </View>
 
               <View style={styles.rules}>
                 <Rule icon="wallet-outline">₹{RESERVATION_FEE} booking fee, paid from your wallet</Rule>
                 <Rule icon="arrow-undo-outline">Cancel within {FREE_CANCEL_MINS} min for a full refund</Rule>
+                <Rule icon="calendar-clear-outline">One at a time, up to {MAX_RESERVATIONS_PER_DAY} a day</Rule>
               </View>
 
               <TouchableOpacity style={styles.startBtn} activeOpacity={0.88} onPress={() => onReserve(hold)}>
@@ -177,10 +178,10 @@ export default function StartSheet({
   );
 }
 
-function MinuteChips({ value, onChange }: { value: number; onChange: (m: number) => void }) {
+function MinuteChips({ options, value, onChange }: { options: readonly number[]; value: number; onChange: (m: number) => void }) {
   return (
     <View style={styles.chips}>
-      {TIME_OPTIONS.map((m) => (
+      {options.map((m) => (
         <TouchableOpacity key={m} onPress={() => onChange(m)} activeOpacity={0.85} style={[styles.chip, value === m && styles.chipOn]}>
           <Text style={[styles.chipNum, value === m && styles.chipTextOn]}>{m}</Text>
           <Text style={[styles.chipUnit, value === m && styles.chipTextOn]}>min</Text>

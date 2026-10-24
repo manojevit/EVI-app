@@ -39,6 +39,16 @@ export interface LiveSession {
 /** Charge or hold lengths offered on the start sheet. */
 export const TIME_OPTIONS = [15, 30, 45, 60] as const;
 
+/**
+ * Reservation rules, modelled on how networks run them (e.g. EVgo holds a booked charger
+ * 20 minutes past its start time, then releases it and keeps a no-show fee; OCPP's
+ * ReserveNow holds a connector until an expiry the operator chooses):
+ * short holds so busy chargers aren't blocked, one at a time, a few a day.
+ */
+export const HOLD_OPTIONS = [10, 15, 20, 30] as const;
+export const DEFAULT_HOLD_MINS = 20;
+export const MAX_RESERVATIONS_PER_DAY = 3;
+
 export interface Reservation {
   id: string;
   stationId: string;
@@ -413,8 +423,10 @@ export const FREE_CANCEL_MINS = 5;
 export const canRefund = (r: Reservation, now = Date.now()) => now < r.startAt + FREE_CANCEL_MINS * 60000;
 
 /** Holds a connector from now for `holdMins`; the fee comes from the wallet. Returns why it failed, or null. */
-export function reserve(r: Omit<Reservation, 'id' | 'feeINR' | 'status' | 'startAt'>): 'balance' | 'exists' | null {
+export function reserve(r: Omit<Reservation, 'id' | 'feeINR' | 'status' | 'startAt'>): 'balance' | 'exists' | 'daily' | null {
   if (liveReservation(state.reservations)) return 'exists';
+  const today = new Date().setHours(0, 0, 0, 0);
+  if (state.reservations.filter((x) => x.startAt >= today).length >= MAX_RESERVATIONS_PER_DAY) return 'daily';
   if (state.walletBalance < RESERVATION_FEE) return 'balance';
   const station = STATIONS.find((s) => s.id === r.stationId);
   set({

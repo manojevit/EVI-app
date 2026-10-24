@@ -13,6 +13,7 @@ import { scaledSheet } from '@/constants/responsive';
 import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
 import {
   FREE_CANCEL_MINS,
+  MAX_RESERVATIONS_PER_DAY,
   RESERVATION_FEE,
   canRefund,
   cancelReservation,
@@ -61,7 +62,7 @@ export default function ReservationsScreen() {
               <Ionicons name="calendar-outline" size={28} color={Palette.forest} />
             </View>
             <Text style={styles.emptyTitle}>No reservation right now</Text>
-            <Text style={styles.emptyText}>Open a station, tap Start on a free connector, then Reserve. We hold it for you for 15 to 60 minutes.</Text>
+            <Text style={styles.emptyText}>Open a station, tap Start on a free connector, then Reserve now. We hold it for you for 10 to 30 minutes.</Text>
             <VoltButton label="Find a charger" icon="map-outline" onPress={() => router.navigate('/map')} style={{ alignSelf: 'stretch', marginTop: Spacing.lg }} />
           </View>
         )}
@@ -69,7 +70,8 @@ export default function ReservationsScreen() {
         <View style={styles.rules}>
           <Rule icon="wallet-outline" text={`₹${RESERVATION_FEE} per booking, paid from your wallet.`} />
           <Rule icon="arrow-undo-outline" text={`Cancel within ${FREE_CANCEL_MINS} minutes of booking and you get it back.`} />
-          <Rule icon="time-outline" text="Not there when the hold ends? The connector is released and the fee isn't refunded." />
+          <Rule icon="time-outline" text="Not plugged in when the hold ends? The connector is released and the fee isn't refunded." />
+          <Rule icon="calendar-clear-outline" text={`One reservation at a time, up to ${MAX_RESERVATIONS_PER_DAY} a day.`} />
         </View>
 
         {past.length ? (
