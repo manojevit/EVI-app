@@ -341,16 +341,27 @@ export const ALL_CHARGER_IDS = STATIONS.flatMap((s) => s.chargers.map((ch) => ch
 export const directionsUrl = (s: Station) =>
   `https://www.google.com/maps/dir/?api=1&destination=${s.latitude},${s.longitude}`;
 
+export type NotificationKind = 'charge' | 'wallet' | 'ticket' | 'station' | 'offer' | 'charger';
 export interface AppNotification {
   id: string;
+  kind: NotificationKind;
   title: string;
   body: string;
   timeAgo: string;
-  group: 'TODAY' | 'EARLIER';
+  group: 'Today' | 'Yesterday' | 'Earlier';
+  unread?: boolean;
 }
 
+// Sample alerts for the prototype (no push backend yet), newest first.
 export const NOTIFICATIONS: AppNotification[] = [
-  { id: 'n1', title: 'test on 12 aug', body: 'Message sent by admin on 12 aug', timeAgo: '3 h ago', group: 'TODAY' },
+  { id: 'n1', kind: 'ticket', title: 'Reply on your ticket', body: 'Very little energy delivered: our team will call you today between 2 and 4 pm.', timeAgo: '1 h ago', group: 'Today', unread: true },
+  { id: 'n2', kind: 'charge', title: 'Charge complete', body: 'EVIT Demo Hub North · 9.24 kWh added for ₹110.88. Your receipt is in Charging history.', timeAgo: '3 h ago', group: 'Today', unread: true },
+  { id: 'n3', kind: 'charger', title: 'Your charger is free', body: 'CCS (DC) at EVIT Demo Hub North is available now. Scan the QR to start.', timeAgo: '4 h ago', group: 'Today' },
+  { id: 'n4', kind: 'station', title: 'New EVIT station near you', body: 'EVIT Demo Hub South is open on MG Road, South Delhi, with 60 kW DC fast charging.', timeAgo: '9:40 am', group: 'Yesterday' },
+  { id: 'n5', kind: 'offer', title: 'Weekend price drop', body: 'Charge at ₹9/kWh at EVI-Test-1 this Saturday and Sunday, 10 am to 4 pm.', timeAgo: '8:15 am', group: 'Yesterday' },
+  { id: 'n6', kind: 'charge', title: 'Charge complete', body: 'EVI-Test-1 · 2.37 kWh added for ₹23.70.', timeAgo: '22 Oct', group: 'Earlier' },
+  { id: 'n7', kind: 'wallet', title: '₹2,000 added to wallet', body: 'Paid by UPI. Thanks for topping up.', timeAgo: '21 Oct', group: 'Earlier' },
+  { id: 'n8', kind: 'ticket', title: 'Ticket received', body: 'We got your ticket about a session that ended early and will reply within one working day.', timeAgo: '20 Oct', group: 'Earlier' },
 ];
 
 export const ACCOUNT = {
