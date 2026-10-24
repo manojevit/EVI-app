@@ -226,7 +226,15 @@ export type AmenityKind = 'food' | 'cafe' | 'restroom' | 'wifi' | 'parking' | 'a
 export interface Amenity {
   kind: AmenityKind;
   name: string;
+  /** 0 = at the station itself */
   distanceM: number;
+  address?: string;
+  rating?: number;
+  reviews?: number;
+  /** opening hours on a 24h clock [opens, closes]; absent = open 24 hours */
+  hours?: [number, number];
+  /** key into PLACE_PHOTOS (src/data/place-photos.ts); absent = icon tile */
+  photo?: string;
 }
 export interface StationExtras {
   rating: number;
@@ -243,55 +251,62 @@ const REVIEWS: Review[] = [
   { id: 'r3', name: 'Vikram P.', stars: 5, date: '3 weeks ago', text: 'Easy QR start, and there’s a café right next door while you wait.' },
 ];
 
+// Places are sample data for the prototype (names, ratings and hours are illustrative).
 export const STATION_EXTRAS: Record<string, StationExtras> = {
   'evi-test-1': {
     rating: 4.6, reviewCount: 128, breakdown: [0.72, 0.18, 0.06, 0.02, 0.02], reviews: REVIEWS,
     amenities: [
-      { kind: 'cafe', name: 'Café Coffee Day', distanceM: 80 },
-      { kind: 'restroom', name: 'Restroom', distanceM: 40 },
-      { kind: 'food', name: 'Food court', distanceM: 220 },
-      { kind: 'atm', name: 'HDFC ATM', distanceM: 300 },
       { kind: 'wifi', name: 'Free Wi-Fi', distanceM: 0 },
+      { kind: 'cafe', name: 'Café Coffee Day', distanceM: 80, address: 'Sector 32 Market, Gurugram', rating: 4.1, reviews: 1284, hours: [9, 23], photo: 'cafe-1' },
+      { kind: 'restroom', name: 'Restroom', distanceM: 40, address: 'Innohouse lobby, ground floor' },
+      { kind: 'food', name: 'Food court', distanceM: 220, address: 'Innohouse, Sector 32', rating: 4.0, reviews: 312, hours: [10, 22], photo: 'food-3' },
+      { kind: 'atm', name: 'HDFC ATM', distanceM: 300, address: 'Sector 32 Market, Gurugram', rating: 4.2, reviews: 96, photo: 'atm-1' },
+      { kind: 'food', name: 'Punjabi Rasoi', distanceM: 350, address: 'Sector 31 Main Road, Gurugram', rating: 4.3, reviews: 2140, hours: [11, 23], photo: 'food-2' },
     ],
   },
   'demo-hub-north': {
     rating: 4.4, reviewCount: 86, breakdown: [0.6, 0.25, 0.09, 0.04, 0.02], reviews: REVIEWS,
     amenities: [
-      { kind: 'food', name: 'Highway dhaba', distanceM: 150 },
-      { kind: 'restroom', name: 'Restroom', distanceM: 30 },
       { kind: 'parking', name: 'Covered parking', distanceM: 0 },
-      { kind: 'pharmacy', name: 'Apollo Pharmacy', distanceM: 450 },
+      { kind: 'restroom', name: 'Restroom', distanceM: 30, address: 'Next to the chargers' },
+      { kind: 'food', name: 'Highway dhaba', distanceM: 150, address: 'NH-44, near Alipur, Delhi', rating: 4.4, reviews: 5620, photo: 'food-2' },
+      { kind: 'cafe', name: 'Chai Point', distanceM: 260, address: 'NH-44 service lane, Alipur', rating: 4.0, reviews: 733, hours: [7, 22], photo: 'cafe-3' },
+      { kind: 'pharmacy', name: 'Apollo Pharmacy', distanceM: 450, address: 'Alipur Main Road, Delhi', rating: 4.2, reviews: 418, hours: [8, 22], photo: 'pharmacy-1' },
     ],
   },
   'demo-hub-south': {
     rating: 4.7, reviewCount: 203, breakdown: [0.78, 0.15, 0.04, 0.02, 0.01], reviews: REVIEWS,
     amenities: [
-      { kind: 'shopping', name: 'MGF Metropolitan Mall', distanceM: 120 },
-      { kind: 'cafe', name: 'Starbucks', distanceM: 140 },
-      { kind: 'restroom', name: 'Restroom', distanceM: 60 },
-      { kind: 'atm', name: 'SBI ATM', distanceM: 200 },
+      { kind: 'restroom', name: 'Restroom', distanceM: 60, address: 'Mall basement, parking level' },
+      { kind: 'shopping', name: 'Metropolitan Mall', distanceM: 120, address: 'MG Road, South Delhi', rating: 4.3, reviews: 44468, hours: [10, 22], photo: 'mall-1' },
+      { kind: 'cafe', name: 'Starbucks', distanceM: 140, address: 'Ground floor, Metropolitan Mall', rating: 4.4, reviews: 3120, hours: [8, 23], photo: 'cafe-2' },
+      { kind: 'atm', name: 'SBI ATM', distanceM: 200, address: 'MG Road, South Delhi', rating: 4.0, reviews: 210, photo: 'atm-1' },
+      { kind: 'food', name: 'The Grand Thali', distanceM: 210, address: 'MG Road, South Delhi', rating: 4.5, reviews: 1980, hours: [12, 23], photo: 'food-1' },
     ],
   },
   'evit-test': {
     rating: 4.2, reviewCount: 41, breakdown: [0.55, 0.25, 0.12, 0.05, 0.03], reviews: REVIEWS.slice(0, 2),
     amenities: [
-      { kind: 'food', name: 'Haldiram’s', distanceM: 260 },
       { kind: 'parking', name: 'Street parking', distanceM: 0 },
+      { kind: 'food', name: 'Haldiram’s', distanceM: 260, address: 'Main Market, Delhi', rating: 4.3, reviews: 12450, hours: [8, 23], photo: 'food-3' },
+      { kind: 'cafe', name: 'Blue Tokai Coffee', distanceM: 320, address: 'Main Market, Delhi', rating: 4.5, reviews: 2210, hours: [8, 22], photo: 'cafe-1' },
     ],
   },
   'iit-delhi-99c': {
     rating: 4.5, reviewCount: 57, breakdown: [0.65, 0.22, 0.08, 0.03, 0.02], reviews: REVIEWS.slice(1),
     amenities: [
-      { kind: 'cafe', name: 'Campus café', distanceM: 90 },
       { kind: 'wifi', name: 'Free Wi-Fi', distanceM: 0 },
-      { kind: 'restroom', name: 'Restroom', distanceM: 70 },
+      { kind: 'restroom', name: 'Restroom', distanceM: 70, address: 'Block 99C, ground floor' },
+      { kind: 'cafe', name: 'Campus café', distanceM: 90, address: 'IIT Delhi, Hauz Khas', rating: 4.2, reviews: 640, hours: [8, 21], photo: 'cafe-2' },
+      { kind: 'food', name: 'Hauz Khas food street', distanceM: 600, address: 'Hauz Khas Village, Delhi', rating: 4.4, reviews: 8930, hours: [12, 23], photo: 'food-1' },
     ],
   },
   'krishna-vihar': {
     rating: 4.1, reviewCount: 33, breakdown: [0.5, 0.28, 0.13, 0.05, 0.04], reviews: REVIEWS.slice(0, 2),
     amenities: [
-      { kind: 'food', name: 'Local eateries', distanceM: 180 },
-      { kind: 'pharmacy', name: 'Chemist', distanceM: 240 },
+      { kind: 'food', name: 'Local eateries', distanceM: 180, address: 'Krishna Vihar Market, Nangloi', rating: 4.0, reviews: 520, hours: [10, 22], photo: 'food-2' },
+      { kind: 'pharmacy', name: 'Chemist', distanceM: 240, address: 'Nangloi Main Road, Delhi', rating: 4.1, reviews: 130, hours: [9, 22], photo: 'pharmacy-1' },
+      { kind: 'atm', name: 'PNB ATM', distanceM: 300, address: 'Nangloi Main Road, Delhi', rating: 3.9, reviews: 88, photo: 'atm-1' },
     ],
   },
 };

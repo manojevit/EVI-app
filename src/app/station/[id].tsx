@@ -40,6 +40,7 @@ import {
   type Review,
   type Station,
 } from '@/data/mock';
+import { PLACE_PHOTOS, compactCount, openLabel } from '@/data/place-photos';
 import { stationPhotos, type StationPhoto } from '@/data/station-photos';
 
 /** Each kind of place nearby gets its own icon and colour, so the list reads at a glance. */
@@ -121,6 +122,9 @@ export default function StationDetail() {
         drag.value = withSpring(0, { damping: 18, stiffness: 220 });
       }
     });
+  // two place cards per row on the Nearby tab
+  // (2pt spare so rounding or the tablet column border never pushes the second card down a row)
+  const placeCardW = Math.floor((width - s(Spacing.lg) * 2 - s(Spacing.md) - 2) / 2);
   // at least a screen tall, so switching to a short tab keeps the tabs pinned at the top
   const bodyMinH = height - s(150);
   const slideStyle = useAnimatedStyle(() => ({ transform: [{ translateX: drag.value }] }));
@@ -249,7 +253,7 @@ export default function StationDetail() {
               </>
             ) : null}
             {tab === 'Info' ? <InfoTab station={station} open={open} km={km} onReport={() => router.push('/new-ticket')} /> : null}
-            {tab === 'Nearby' ? <NearbyTab station={station} amenities={extras.amenities} /> : null}
+            {tab === 'Nearby' ? <NearbyTab station={station} amenities={extras.amenities} cardW={placeCardW} /> : null}
             {tab === 'Reviews' ? <ReviewsTab station={station} rating={rating} ratingCount={ratingCount} mine={mine} /> : null}
           </Animated.View>
         </GestureDetector>
@@ -492,7 +496,7 @@ function InfoRow({ icon, label, last, children }: { icon: keyof typeof Ionicons.
 
 // ---------- Nearby tab ----------
 
-function NearbyTab({ station, amenities }: { station: Station; amenities: Amenity[] }) {
+function NearbyTab({ station, amenities, cardW }: { station: Station; amenities: Amenity[]; cardW: number }) {
   const [kind, setKind] = useState<AmenityKind | 'all'>('all');
   if (!amenities.length) return <Text style={styles.emptyText}>No places listed near this station yet.</Text>;
 
@@ -502,7 +506,7 @@ function NearbyTab({ station, amenities }: { station: Station; amenities: Amenit
   const shown = kind === 'all' ? walk : walk.filter((a) => a.kind === kind);
   const walkTo = (a: Amenity) =>
     Linking.openURL(
-      `https://www.google.com/maps/dir/?api=1&origin=${station.latitude},${station.longitude}&destination=${encodeURIComponent(`${a.name}, ${station.address}, ${station.city}`)}&travelmode=walking`,
+      `https://www.google.com/maps/dir/?api=1&origin=${station.latitude},${station.longitude}&destination=${encodeURIComponent(`${a.name}, ${a.address ?? station.address}, ${station.city}`)}&travelmode=walking`,
     );
 
   return (
@@ -526,9 +530,12 @@ function NearbyTab({ station, amenities }: { station: Station; amenities: Amenit
 
       {walk.length ? (
         <>
-          <View style={styles.cardHead}>
-            <Text style={styles.cardTitle}>Walk to while you charge</Text>
-            <Text style={styles.tabNote}>{walk.length} places</Text>
+          <View>
+            <View style={styles.cardHead}>
+              <Text style={styles.exploreTitle}>Explore nearby</Text>
+              <Text style={styles.tabNote}>{walk.length} places</Text>
+            </View>
+            <Text style={styles.exploreSub}>Walk over while your car charges.</Text>
           </View>
           {kinds.length > 1 ? (
             <View style={styles.filterRow}>
@@ -540,33 +547,71 @@ function NearbyTab({ station, amenities }: { station: Station; amenities: Amenit
               ))}
             </View>
           ) : null}
-          <View style={styles.card}>
-            {shown.map((a, i) => {
-              const k = AMENITY[a.kind];
-              const mins = Math.max(1, Math.round(a.distanceM / WALK_M_PER_MIN));
-              return (
-                <View key={a.name} style={[styles.placeRow, i > 0 && styles.connDivider]}>
-                  <View style={[styles.placeIcon, { backgroundColor: k.tint }]}>
-                    <MaterialCommunityIcons name={k.icon} size={22} color={k.ink} />
-                  </View>
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <Text style={styles.placeName} numberOfLines={1}>
-                      {a.name}
-                    </Text>
-                    <Text style={styles.placeMeta}>
-                      {k.label} · {mins} min walk · {a.distanceM} m
-                    </Text>
-                  </View>
-                  <TouchableOpacity style={styles.walkBtn} onPress={() => walkTo(a)} activeOpacity={0.8} accessibilityLabel={`Walking directions to ${a.name}`}>
-                    <MaterialCommunityIcons name="walk" size={18} color={Palette.forest} />
-                  </TouchableOpacity>
-                </View>
-              );
-            })}
+          <View style={styles.placeGrid}>
+            {shown.map((a) => (
+              <PlaceCard key={a.name} place={a} width={cardW} onDirections={() => walkTo(a)} />
+            ))}
           </View>
         </>
       ) : null}
     </>
+  );
+}
+
+/** A place you can walk to: photo, name, address, rating, opening state and directions. */
+function PlaceCard({ place, width, onDirections }: { place: Amenity; width: number; onDirections: () => void }) {
+  const k = AMENITY[place.kind];
+  const mins = Math.max(1, Math.round(place.distanceM / WALK_M_PER_MIN));
+  const photo = place.photo ? PLACE_PHOTOS[place.photo] : undefined;
+  const hours = openLabel(place.hours);
+  return (
+    <View style={[styles.place, { width }]}>
+      <View style={[styles.placeMedia, { height: Math.round(width * 0.68) }]}>
+        {photo ? (
+          <Image source={photo} style={StyleSheet.absoluteFill} contentFit="cover" transition={150} />
+        ) : (
+          <View style={[StyleSheet.absoluteFill, styles.placeTile, { backgroundColor: k.tint }]}>
+            <MaterialCommunityIcons name={k.icon} size={s(38)} color={k.ink} />
+          </View>
+        )}
+        <View style={styles.walkBadge}>
+          <MaterialCommunityIcons name="walk" size={12} color={Palette.white} />
+          <Text style={styles.walkBadgeText}>{mins} min</Text>
+        </View>
+        <View style={styles.kindBadge}>
+          <MaterialCommunityIcons name={k.icon} size={13} color={k.ink} />
+        </View>
+      </View>
+      <View style={styles.placeBody}>
+        <Text style={styles.placeName} numberOfLines={1}>
+          {place.name}
+        </Text>
+        <Text style={styles.placeAddr} numberOfLines={1}>
+          {place.address ?? `${place.distanceM} m away`}
+        </Text>
+        <View style={styles.placeLine}>
+          {place.rating ? (
+            <>
+              <Text style={styles.placeRating}>{place.rating.toFixed(1)}</Text>
+              <Ionicons name="star" size={11} color={Palette.amber} />
+              {place.reviews ? <Text style={styles.placeMeta}>({compactCount(place.reviews)})</Text> : null}
+              <Text style={styles.placeMeta}> · </Text>
+            </>
+          ) : null}
+          <Text style={[styles.placeMeta, { flexShrink: 1 }]} numberOfLines={1}>
+            {k.label}
+          </Text>
+        </View>
+        <Text style={styles.placeMeta} numberOfLines={1}>
+          <Text style={{ color: hours.open ? Palette.forest : Palette.red, fontFamily: Font.semibold }}>{hours.status}</Text>
+          {hours.detail ? ` · ${hours.detail}` : ''}
+        </Text>
+        <TouchableOpacity style={styles.placeBtn} activeOpacity={0.8} onPress={onDirections} accessibilityLabel={`Walking directions to ${place.name}`}>
+          <Ionicons name="navigate-outline" size={13} color={Palette.forest} />
+          <Text style={styles.placeBtnText}>Directions</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
   );
 }
 
@@ -827,11 +872,23 @@ const styles = scaledSheet({
   filterOn: { backgroundColor: Palette.ink, borderColor: Palette.ink },
   filterText: { fontFamily: Font.semibold, fontSize: 13, color: Palette.inkSoft },
   filterTextOn: { color: Palette.white },
-  placeRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, paddingHorizontal: Spacing.md, paddingVertical: Spacing.md },
-  placeIcon: { width: 46, height: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  placeName: { fontFamily: Font.semibold, fontSize: 15, color: Palette.ink },
-  placeMeta: { fontFamily: Font.regular, fontSize: 12, color: Palette.mist, marginTop: 2 },
-  walkBtn: { width: 40, height: 40, borderRadius: 20, borderWidth: 1.5, borderColor: Palette.brandTint2, alignItems: 'center', justifyContent: 'center' },
+  exploreTitle: { fontFamily: Font.displaySemi, fontSize: 18, color: Palette.ink },
+  exploreSub: { fontFamily: Font.regular, fontSize: 13, color: Palette.mist, marginTop: 2 },
+  placeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.md },
+  place: { backgroundColor: Palette.surface, borderRadius: 18, overflow: 'hidden', ...Shadow.soft },
+  placeMedia: { backgroundColor: Palette.canvasDeep },
+  placeTile: { alignItems: 'center', justifyContent: 'center' },
+  walkBadge: { position: 'absolute', left: 8, bottom: 8, flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: 'rgba(8,24,15,0.62)', borderRadius: Radius.pill, paddingHorizontal: 7, paddingVertical: 3 },
+  walkBadgeText: { fontFamily: Font.semibold, fontSize: 11, color: Palette.white },
+  kindBadge: { position: 'absolute', right: 8, top: 8, width: 26, height: 26, borderRadius: 13, backgroundColor: 'rgba(255,255,255,0.92)', alignItems: 'center', justifyContent: 'center' },
+  placeBody: { padding: 10, gap: 2 },
+  placeName: { fontFamily: Font.semibold, fontSize: 14, color: Palette.ink },
+  placeAddr: { fontFamily: Font.regular, fontSize: 12, color: Palette.mist },
+  placeLine: { flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 2 },
+  placeRating: { fontFamily: Font.semibold, fontSize: 12, color: Palette.ink },
+  placeMeta: { fontFamily: Font.regular, fontSize: 12, color: Palette.mist },
+  placeBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, height: 32, borderRadius: Radius.pill, backgroundColor: Palette.voltSoft, marginTop: 8 },
+  placeBtnText: { fontFamily: Font.bold, fontSize: 12, color: Palette.forest },
 
   // reviews
   ratingTop: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xl },
