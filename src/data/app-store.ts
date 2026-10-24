@@ -16,6 +16,7 @@ import {
   WALLET_TXNS,
   type Charger,
   type Connector,
+  type Review,
   type SessionRecord,
   type Station,
   type Ticket,
@@ -54,6 +55,8 @@ interface AppState {
   planId: string | null;
   /** where distances count from: the phone's GPS once known, else a demo spot in central Delhi */
   location: UserLocation;
+  /** the user's own review per station (one each; submitting again replaces it) */
+  myReviews: Record<string, Review>;
 }
 
 export interface UserLocation {
@@ -75,6 +78,7 @@ let state: AppState = {
   filters: NO_FILTERS,
   planId: null,
   location: { ...USER_LOCATION, live: false },
+  myReviews: {},
 };
 
 const listeners = new Set<() => void>();
@@ -240,4 +244,16 @@ export function subscribePlan(plan: { id: string; name: string; priceINR: number
 
 export function setLocation(latitude: number, longitude: number) {
   set({ location: { latitude, longitude, live: true } });
+}
+
+export function submitReview(stationId: string, r: { stars: number; text: string; tags: string[] }) {
+  const review: Review = {
+    id: `me-${stationId}`,
+    name: state.profile.name,
+    stars: r.stars,
+    date: 'Just now',
+    text: r.text.trim(),
+    tags: r.tags,
+  };
+  set({ myReviews: { ...state.myReviews, [stationId]: review } });
 }

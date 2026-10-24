@@ -14,7 +14,8 @@ import { Palette } from '@/constants/theme';
  *   {type:'locate'}                glide back to the car
  *   {type:'fit', points}           fit these [lng, lat] points into view
  */
-export type MapPin = { id: string; latitude: number; longitude: number; available: boolean };
+/** `free`: plugs free right now, shown as a small badge on the pin */
+export type MapPin = { id: string; latitude: number; longitude: number; available: boolean; free?: number };
 export type MapPadding = { top: number; bottom: number; left: number; right: number };
 export type MapPoint = { latitude: number; longitude: number };
 export type MapCommand =
@@ -26,9 +27,12 @@ export type MapCommand =
 const MAPLIBRE = 'https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl';
 const STYLE_URL = 'https://tiles.openfreemap.org/styles/positron';
 
-const BOLT = `<svg width="16" height="16" viewBox="0 0 24 24"><path fill="${Palette.forest}" d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>`;
-const BOLT_OFF = BOLT.replace(Palette.forest, '#99A49D');
-const BOLT_SEL = BOLT.replace(Palette.forest, '#FFFFFF');
+// Teardrop pin: brand-green body, white disc with the bolt, white rim. Grey when nothing is free.
+const pinSvg = (body: string, bolt: string) =>
+  `<svg class="shape" width="40" height="50" viewBox="0 0 40 50"><path d="M20 48.5C20 48.5 3.5 31.2 3.5 19A16.5 16.5 0 0 1 36.5 19C36.5 31.2 20 48.5 20 48.5Z" fill="${body}" stroke="#fff" stroke-width="2.5"/><circle cx="20" cy="19" r="10.5" fill="#fff"/><path transform="translate(12.5 11.5) scale(.62)" fill="${bolt}" d="M13 2 4 14h6l-1 8 9-12h-6z"/></svg>`;
+const PIN_FREE = pinSvg(Palette.volt, Palette.forest);
+const PIN_BUSY = pinSvg('#8E9A92', '#6B776F');
+const PIN_SEL = pinSvg(Palette.forestDeep, Palette.forestDeep);
 const CAR = `<svg width="20" height="20" viewBox="0 0 24 24"><path fill="#fff" d="M18.92 6.01C18.72 5.42 18.16 5 17.5 5h-11c-.66 0-1.21.42-1.42 1.01L3 12v8c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h12v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-8l-2.08-5.99zM6.5 16c-.83 0-1.5-.67-1.5-1.5S5.67 13 6.5 13s1.5.67 1.5 1.5S7.33 16 6.5 16zm11 0c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zM5 11l1.5-4.5h11L19 11H5z"/></svg>`;
 export const USER_BLUE = '#2563EB';
 
@@ -47,16 +51,16 @@ export function liveMapHtml(o: {
 <script src="${MAPLIBRE}.js"></script>
 <style>
 html,body,#map{margin:0;height:100%;width:100%;background:#EEF3EC;overflow:hidden}
-.pin{width:44px;height:52px;cursor:pointer;-webkit-tap-highlight-color:transparent}
-.in{position:relative;width:44px;height:52px;transform-origin:50% 100%;transition:transform .25s cubic-bezier(.2,1.4,.4,1)}
-.dot{position:absolute;left:4px;top:4px;width:36px;height:36px;border-radius:18px;background:#fff;border:3px solid ${Palette.volt};box-sizing:border-box;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 10px rgba(26,59,40,.2);transition:background .2s}
-.stem{position:absolute;left:20.5px;top:38px;width:3px;height:10px;border-radius:2px;background:${Palette.volt}}
-.pulse{position:absolute;left:0;top:0;width:44px;height:44px;border-radius:22px;background:${Palette.volt};opacity:0;animation:pulse 1.8s ease-out infinite}
-.off .dot{border-color:#99A49D}.off .stem{background:#99A49D}.off .pulse{display:none}
-.sel{z-index:5}.sel .in{transform:scale(1.28)}.sel .dot{background:${Palette.forest};border-color:#fff;box-shadow:0 6px 16px rgba(23,113,58,.45)}.sel .stem{background:${Palette.forest}}
-.sel.off .dot{background:#8E9A92}
-.b-sel{display:none}.sel .b-def{display:none}.sel .b-sel{display:block}
-@keyframes pulse{0%{transform:scale(.55);opacity:.45}100%{transform:scale(1.45);opacity:0}}
+.pin{width:40px;height:50px;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.in{position:relative;width:40px;height:50px;transform-origin:50% 100%;transition:transform .25s cubic-bezier(.2,1.4,.4,1);filter:drop-shadow(0 4px 6px rgba(20,60,36,.28))}
+.shape{position:absolute;left:0;top:0}
+.s-sel{display:none}.sel .s-def{display:none}.sel .s-sel{display:block}
+.sel{z-index:5}.sel .in{transform:scale(1.25)}
+.count{position:absolute;right:-5px;top:-3px;min-width:18px;height:18px;padding:0 4px;box-sizing:border-box;border-radius:9px;background:#fff;color:${Palette.forest};font:700 11px/18px -apple-system,Roboto,sans-serif;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.2)}
+.off .count{display:none}
+.pulse{position:absolute;left:8px;top:41px;width:24px;height:10px;border-radius:50%;background:${Palette.volt};opacity:0;animation:pulse 1.8s ease-out infinite}
+.off .pulse{display:none}
+@keyframes pulse{0%{transform:scale(.5);opacity:.55}100%{transform:scale(2.4);opacity:0}}
 .drop{animation:drop .65s cubic-bezier(.2,1.5,.4,1) both}
 @keyframes drop{0%{transform:translateY(-30px) scale(.6);opacity:0}100%{transform:none;opacity:1}}
 .me{position:relative;width:40px;height:40px;pointer-events:none}
@@ -126,7 +130,7 @@ try {
   O.pins.forEach(function(p,i){
     var el=document.createElement('div');
     el.className='pin'+(p.available?'':' off');
-    el.innerHTML='<div class="in'+(O.animatePins?' drop':'')+'" style="animation-delay:'+(250+i*110)+'ms"><div class="pulse" style="animation-delay:'+(i*260)+'ms"></div><div class="dot"><span class="b-def">'+(p.available?'${BOLT}':'${BOLT_OFF}')+'</span><span class="b-sel">${BOLT_SEL}</span></div><div class="stem"></div></div>';
+    el.innerHTML='<div class="pulse" style="animation-delay:'+(i*260)+'ms"></div><div class="in'+(O.animatePins?' drop':'')+'" style="animation-delay:'+(250+i*110)+'ms"><span class="s-def">'+(p.available?'${PIN_FREE}':'${PIN_BUSY}')+'</span><span class="s-sel">${PIN_SEL}</span>'+(p.free?'<span class="count">'+p.free+'</span>':'')+'</div>';
     el.addEventListener('click',function(e){e.stopPropagation();post({type:'station',id:p.id});});
     els[p.id]=el; coords[p.id]=[p.longitude,p.latitude];
     new maplibregl.Marker({element:el,anchor:'bottom'}).setLngLat([p.longitude,p.latitude]).addTo(map);

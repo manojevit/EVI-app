@@ -103,12 +103,17 @@ export const STATIONS: Station[] = [
         id: 'ch1', serial: 'HUBN-01', current: 'DC', powerKw: 60, online: true,
         connectors: [
           { id: 'c1', number: 1, type: 'ccs', availability: 'Available' },
-          { id: 'c2', number: 2, type: 'chademo', availability: 'Available' },
+          { id: 'c2', number: 2, type: 'chademo', availability: 'Charging' },
+          { id: 'c3', number: 3, type: 'gbt', availability: 'Available' },
         ],
       },
       {
         id: 'ch2', serial: 'HUBN-02', current: 'AC', powerKw: 22, online: true,
-        connectors: [{ id: 'c1', number: 1, type: 'type2', availability: 'Available' }],
+        connectors: [
+          { id: 'c1', number: 1, type: 'type2', availability: 'Available' },
+          { id: 'c2', number: 2, type: 'iec', availability: 'Available' },
+          { id: 'c3', number: 3, type: 'bevc', availability: 'Unavailable' },
+        ],
       },
     ],
   },
@@ -215,6 +220,7 @@ export interface Review {
   stars: number;
   date: string;
   text: string;
+  tags?: string[];
 }
 export type AmenityKind = 'food' | 'cafe' | 'restroom' | 'wifi' | 'parking' | 'atm' | 'shopping' | 'pharmacy';
 export interface Amenity {

@@ -3,18 +3,29 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import {
+  KeyboardAvoidingView,
+  Linking,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  useWindowDimensions,
+} from 'react-native';
 
 import AppHeader from '@/components/app-header';
 import ConnectorIcon from '@/components/connector-icon';
+import LiveMap from '@/components/live-map';
 import VoltButton from '@/components/volt-button';
 import { s, scaledSheet } from '@/constants/responsive';
 import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
-import { startSession, toggleFavourite, useAppStore } from '@/data/app-store';
-import { CONNECTORS } from '@/data/connectors';
+import { startSession, submitReview, toggleFavourite, useAppStore } from '@/data/app-store';
+import { CONNECTORS, type ConnectorKey } from '@/data/connectors';
 import {
   STATIONS,
-  connectorTypesAt,
   directionsUrl,
   distanceKm,
   freeConnectorCount,
@@ -26,11 +37,12 @@ import {
   type AmenityKind,
   type Charger,
   type Connector,
+  type Review,
   type Station,
 } from '@/data/mock';
 import { stationPhotos, type StationPhoto } from '@/data/station-photos';
 
-/** Each kind of place nearby gets its own icon and colour, so the grid reads at a glance. */
+/** Each kind of place nearby gets its own icon and colour, so the list reads at a glance. */
 const AMENITY: Record<AmenityKind, { icon: keyof typeof MaterialCommunityIcons.glyphMap; label: string; tint: string; ink: string }> = {
   food: { icon: 'silverware-fork-knife', label: 'Food', tint: '#FFF0E3', ink: '#B4560F' },
   cafe: { icon: 'coffee', label: 'Café', tint: '#F6ECE4', ink: '#7A4A2A' },
@@ -43,9 +55,15 @@ const AMENITY: Record<AmenityKind, { icon: keyof typeof MaterialCommunityIcons.g
 };
 const WALK_M_PER_MIN = 80;
 const SLIDE_MS = 3500;
+const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+const STAR_WORDS = ['', 'Poor', 'Below average', 'Okay', 'Good', 'Excellent'];
+const GOOD_TAGS = ['Fast charging', 'Easy to find', 'Clean & safe', 'Fair price', 'Helpful staff'];
+const BAD_TAGS = ['Slow charging', 'Hard to find', 'Connector problem', 'Long wait', 'Not clean'];
 
 const TABS = ['Chargers', 'Info', 'Nearby', 'Reviews'] as const;
 type Tab = (typeof TABS)[number];
+
+const kmLabel = (km: number) => `${km < 10 ? km.toFixed(1) : Math.round(km)} km`;
 
 export default function StationDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -56,12 +74,12 @@ export default function StationDetail() {
   const tabsY = useRef(0);
   const scrollY = useRef(0);
   const [tab, setTab] = useState<Tab>('Chargers');
-  const [myRating, setMyRating] = useState(0);
   const session = useAppStore((st) => st.session);
   const from = useAppStore((st) => st.location);
 
   const station = STATIONS.find((x) => x.id === id) ?? STATIONS[0];
   const fav = useAppStore((st) => st.favourites.includes(station.id));
+  const mine = useAppStore((st) => st.myReviews[station.id]);
   const extras = stationExtras(station);
   const total = stationConnectors(station).length;
   const free = freeConnectorCount(station);
@@ -69,6 +87,9 @@ export default function StationDetail() {
   const open = isOpenNow(station);
   const dc = station.chargers.some((c) => c.current === 'DC' && c.online);
   const vehicle = useAppStore((st) => st.vehicles[0]);
+  // the user's own review counts towards the average
+  const rating = mine ? (extras.rating * extras.reviewCount + mine.stars) / (extras.reviewCount + 1) : extras.rating;
+  const ratingCount = extras.reviewCount + (mine ? 1 : 0);
 
   const openTab = (t: Tab) => {
     setTab(t);
@@ -82,7 +103,7 @@ export default function StationDetail() {
   };
 
   return (
-    <View style={styles.container}>
+    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <AppHeader
         back
         rightNode={
@@ -96,6 +117,7 @@ export default function StationDetail() {
         stickyHeaderIndices={[1]}
         onScroll={(e) => (scrollY.current = e.nativeEvent.contentOffset.y)}
         scrollEventThrottle={32}
+        keyboardShouldPersistTaps="handled"
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}>
         {/* 0: summary */}
@@ -111,7 +133,7 @@ export default function StationDetail() {
             </View>
             <TouchableOpacity style={styles.ratingBadge} onPress={() => openTab('Reviews')} activeOpacity={0.8} accessibilityLabel="See reviews">
               <Ionicons name="star" size={13} color={Palette.amber} />
-              <Text style={styles.ratingBadgeText}>{extras.rating.toFixed(1)}</Text>
+              <Text style={styles.ratingBadgeText}>{rating.toFixed(1)}</Text>
             </TouchableOpacity>
           </View>
 
@@ -136,7 +158,7 @@ export default function StationDetail() {
             </View>
           </View>
 
-          <VoltButton label={`Navigate · ${km < 10 ? km.toFixed(1) : Math.round(km)} km`} icon="navigate" onPress={() => Linking.openURL(directionsUrl(station))} />
+          <VoltButton label={`Navigate · ${kmLabel(km)}`} icon="navigate" onPress={() => Linking.openURL(directionsUrl(station))} />
         </View>
 
         {/* 1: tabs (stick to the top while scrolling) */}
@@ -160,6 +182,10 @@ export default function StationDetail() {
         <View style={styles.body}>
           {tab === 'Chargers' ? (
             <>
+              <Text style={styles.tabNote}>
+                {station.chargers.length} {station.chargers.length === 1 ? 'charger' : 'chargers'} · {total} connectors ·{' '}
+                <Text style={{ color: free ? Palette.forest : Palette.amberDeep, fontFamily: Font.semibold }}>{free} free now</Text>
+              </Text>
               {vehicle ? <FitBanner station={station} vehicle={vehicle} /> : null}
               {session && session.stationId !== station.id ? (
                 <Text style={styles.busyNote} onPress={() => router.navigate('/sessions')}>
@@ -179,12 +205,12 @@ export default function StationDetail() {
               ))}
             </>
           ) : null}
-          {tab === 'Info' ? <InfoTab station={station} open={open} km={km} /> : null}
-          {tab === 'Nearby' ? <NearbyTab amenities={extras.amenities} /> : null}
-          {tab === 'Reviews' ? <Ratings station={station} myRating={myRating} onRate={setMyRating} /> : null}
+          {tab === 'Info' ? <InfoTab station={station} open={open} km={km} from={from} onReport={() => router.push('/new-ticket')} /> : null}
+          {tab === 'Nearby' ? <NearbyTab station={station} amenities={extras.amenities} /> : null}
+          {tab === 'Reviews' ? <ReviewsTab station={station} rating={rating} ratingCount={ratingCount} mine={mine} /> : null}
         </View>
       </ScrollView>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -195,7 +221,7 @@ function Gallery({ photos, width }: { photos: StationPhoto[]; width: number }) {
   const ref = useRef<any>(null);
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
-  const height = Math.round(width * 0.52);
+  const height = Math.round(Math.min(width * 0.52, 300));
 
   useEffect(() => {
     if (paused || photos.length < 2) return;
@@ -240,7 +266,7 @@ function Gallery({ photos, width }: { photos: StationPhoto[]; width: number }) {
   );
 }
 
-// ---------- tabs ----------
+// ---------- Chargers tab ----------
 
 function FitBanner({ station, vehicle }: { station: Station; vehicle: { model: string; connectors: string[] } }) {
   const freeTypes = new Set(stationConnectors(station).filter((c) => c.availability === 'Available').map((c) => c.type as string));
@@ -256,113 +282,12 @@ function FitBanner({ station, vehicle }: { station: Station; vehicle: { model: s
       />
       <Text style={styles.fitText}>
         {fitsNow.length
-          ? `Fits your ${vehicle.model}: ${fitsNow.map((k) => CONNECTORS[k as keyof typeof CONNECTORS].label).join(' and ')} free`
+          ? `Fits your ${vehicle.model}: ${fitsNow.map((k) => CONNECTORS[k as ConnectorKey].label).join(' and ')} free`
           : fitsAtAll
             ? `Your ${vehicle.model}'s connectors are busy here right now`
             : `No connector for your ${vehicle.model} here`}
       </Text>
     </View>
-  );
-}
-
-function InfoTab({ station, open, km }: { station: Station; open: boolean; km: number }) {
-  const types = connectorTypesAt(station);
-  return (
-    <View style={styles.card}>
-      <InfoRow icon="time-outline" title={station.hours === '24 Hours' ? 'Open 24 hours' : station.hours} sub={open ? 'Open now' : 'Closed now'} subTone={open ? 'good' : 'bad'} />
-      <InfoRow
-        icon="location-outline"
-        title={`${station.address}, ${station.city}`}
-        sub={`${km < 10 ? km.toFixed(1) : Math.round(km)} km away · Get directions`}
-        onPress={() => Linking.openURL(directionsUrl(station))}
-      />
-      <InfoRow icon="pricetag-outline" title={`₹${station.pricePerKwh} per kWh`} sub="You pay only for the energy you use" />
-      <InfoRow icon="wallet-outline" title="UPI, card or EVIT wallet" sub="Receipt after every charge" />
-      <View style={[styles.infoRow, { borderBottomWidth: 0 }]}>
-        <View style={styles.infoIcon}>
-          <Ionicons name="flash-outline" size={19} color={Palette.forest} />
-        </View>
-        <View style={{ flex: 1, gap: Spacing.sm }}>
-          <Text style={styles.infoTitle}>
-            {station.chargers.length} {station.chargers.length === 1 ? 'charger' : 'chargers'}, up to {maxPowerKw(station)} kW
-          </Text>
-          <View style={styles.typeWrap}>
-            {types.map((k) => (
-              <View key={k} style={styles.typePill}>
-                <ConnectorIcon type={k} size={16} />
-                <Text style={styles.typeText}>{CONNECTORS[k].label}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
-      </View>
-    </View>
-  );
-}
-
-function InfoRow({
-  icon,
-  title,
-  sub,
-  subTone,
-  onPress,
-}: {
-  icon: keyof typeof Ionicons.glyphMap;
-  title: string;
-  sub: string;
-  subTone?: 'good' | 'bad';
-  onPress?: () => void;
-}) {
-  const body = (
-    <>
-      <View style={styles.infoIcon}>
-        <Ionicons name={icon} size={19} color={Palette.forest} />
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.infoTitle}>{title}</Text>
-        <Text style={[styles.infoSub, subTone === 'good' && { color: Palette.forest }, subTone === 'bad' && { color: Palette.red }, onPress && styles.infoLink]}>{sub}</Text>
-      </View>
-      {onPress ? <Ionicons name="chevron-forward" size={17} color={Palette.mistLight} /> : null}
-    </>
-  );
-  return onPress ? (
-    <TouchableOpacity style={styles.infoRow} onPress={onPress} activeOpacity={0.7}>
-      {body}
-    </TouchableOpacity>
-  ) : (
-    <View style={styles.infoRow}>{body}</View>
-  );
-}
-
-function NearbyTab({ amenities }: { amenities: Amenity[] }) {
-  if (!amenities.length) return <Text style={styles.emptyText}>No places listed near this station yet.</Text>;
-  const within5 = amenities.filter((a) => a.distanceM <= WALK_M_PER_MIN * 5).length;
-  return (
-    <>
-      <Text style={styles.tabNote}>
-        {within5} {within5 === 1 ? 'place' : 'places'} within a 5-minute walk
-      </Text>
-      <View style={styles.placeGrid}>
-        {amenities.map((a) => {
-          const k = AMENITY[a.kind];
-          const mins = Math.max(1, Math.round(a.distanceM / WALK_M_PER_MIN));
-          return (
-            <View key={a.name} style={[styles.place, { backgroundColor: k.tint }]}>
-              <View style={styles.placeIcon}>
-                <MaterialCommunityIcons name={k.icon} size={22} color={k.ink} />
-              </View>
-              <Text style={styles.placeName} numberOfLines={2}>
-                {a.name}
-              </Text>
-              <View style={styles.placeFoot}>
-                <MaterialCommunityIcons name={a.distanceM ? 'walk' : 'map-marker-check'} size={14} color={k.ink} />
-                <Text style={[styles.placeDist, { color: k.ink }]}>{a.distanceM ? `${mins} min · ${a.distanceM} m` : 'On site'}</Text>
-              </View>
-            </View>
-          );
-        })}
-      </View>
-    </>
   );
 }
 
@@ -382,16 +307,22 @@ function ChargerCard({
   onOpenSession: () => void;
 }) {
   const off = !charger.online;
+  const isDc = charger.current === 'DC';
+  const state = (c: Connector) =>
+    c.id === activeConnectorId ? 'mine' : off ? 'off' : c.availability === 'Available' ? 'free' : c.availability === 'Charging' ? 'busy' : 'off';
+  const freeHere = charger.connectors.filter((c) => state(c) === 'free').length;
+
   return (
     <View style={[styles.charger, off && styles.chargerOff]}>
       <View style={styles.chHead}>
-        <View style={[styles.currentBadge, charger.current === 'DC' ? styles.dcBadge : styles.acBadge, off && styles.badgeOff]}>
-          <Text style={[styles.currentText, charger.current === 'DC' && !off && { color: Palette.white }]}>{charger.current}</Text>
+        <View style={[styles.currentBadge, isDc ? styles.dcBadge : styles.acBadge, off && styles.badgeOff]}>
+          <Ionicons name="flash" size={14} color={isDc && !off ? Palette.white : off ? Palette.mist : Palette.forest} />
+          <Text style={[styles.currentText, isDc && !off && { color: Palette.white }, off && { color: Palette.mist }]}>{charger.current}</Text>
         </View>
-        <View style={{ flex: 1 }}>
+        <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={styles.serial}>{charger.serial}</Text>
           <Text style={styles.chMeta}>
-            Up to {charger.powerKw} kW{charger.current === 'DC' ? ' · fast' : ''}
+            {isDc ? 'DC fast' : 'AC'} · up to {charger.powerKw} kW
           </Text>
         </View>
         <View style={[styles.onlineRow, off && styles.onlineRowOff]}>
@@ -400,43 +331,255 @@ function ChargerCard({
         </View>
       </View>
 
-      {charger.connectors.map((c) => {
-        const mine = c.id === activeConnectorId;
-        const free = !off && c.availability === 'Available';
-        const inUse = !off && c.availability === 'Charging';
+      {/* one segment per connector */}
+      <View style={styles.segRow}>
+        <View style={styles.segs}>
+          {charger.connectors.map((c) => {
+            const st = state(c);
+            return <View key={c.id} style={[styles.seg, { backgroundColor: st === 'free' || st === 'mine' ? Palette.volt : st === 'busy' ? Palette.amber : Palette.line }]} />;
+          })}
+        </View>
+        <Text style={styles.segText}>{off ? 'Not available' : `${freeHere} of ${charger.connectors.length} free`}</Text>
+      </View>
+
+      {charger.connectors.map((c, i) => {
+        const st = state(c);
+        const lit = st === 'free' || st === 'mine';
+        const label = { mine: 'Your session', free: 'Available', busy: 'In use', off: off ? 'Offline' : 'Unavailable' }[st];
+        const tone = { mine: Palette.forest, free: Palette.forest, busy: Palette.amberDeep, off: Palette.mist }[st];
         return (
-          <View key={c.id} style={styles.connRow}>
-            <View style={[styles.iconBox, !free && !mine && styles.iconBoxMuted]}>
-              <ConnectorIcon type={c.type} size={24} muted={!free && !mine} />
+          <View key={c.id} style={[styles.connRow, i > 0 && styles.connDivider]}>
+            <View style={[styles.iconBox, !lit && styles.iconBoxMuted]}>
+              <ConnectorIcon type={c.type} size={34} original muted={!lit} />
             </View>
             <View style={{ flex: 1, minWidth: 0 }}>
               <View style={styles.connTitleRow}>
-                <Text style={[styles.connType, !free && !mine && { color: Palette.mist }]} numberOfLines={1}>
+                <Text style={[styles.connType, !lit && { color: Palette.mist }]} numberOfLines={1}>
                   {CONNECTORS[c.type].label}
                 </Text>
-                {matches.includes(c.type) && (free || mine) ? <Text style={styles.fitsTag}>Your car</Text> : null}
+                {matches.includes(c.type) && lit ? <Text style={styles.fitsTag}>Your car</Text> : null}
               </View>
-              <Text style={styles.connMeta}>Connector {c.number}</Text>
+              <Text style={styles.connMeta} numberOfLines={1}>
+                Connector {c.number} · <Text style={{ color: tone, fontFamily: Font.semibold }}>{label}</Text>
+              </Text>
             </View>
-            {mine ? (
+            {st === 'mine' ? (
               <TouchableOpacity style={styles.mineBtn} activeOpacity={0.85} onPress={onOpenSession}>
-                <Text style={styles.mineText}>Charging</Text>
+                <Text style={styles.mineText}>View</Text>
               </TouchableOpacity>
-            ) : free ? (
-              <TouchableOpacity style={[styles.startBtn, !canStart && styles.startOff]} activeOpacity={0.85} disabled={!canStart} onPress={() => onStart(c)}>
+            ) : st === 'free' ? (
+              <TouchableOpacity style={[styles.startBtn, !canStart && styles.startOff]} activeOpacity={0.85} disabled={!canStart} onPress={() => onStart(c)} accessibilityLabel={`Start charging on connector ${c.number}`}>
+                <Ionicons name="flash" size={13} color={Palette.white} />
                 <Text style={styles.startText}>Start</Text>
               </TouchableOpacity>
-            ) : (
-              <View style={[styles.statePill, inUse && styles.inUsePill]}>
-                <Text style={[styles.stateText, inUse && { color: Palette.amberDeep }]}>{inUse ? 'In use' : 'Unavailable'}</Text>
-              </View>
-            )}
+            ) : null}
           </View>
         );
       })}
     </View>
   );
 }
+
+// ---------- Info tab ----------
+
+function InfoTab({
+  station,
+  open,
+  km,
+  from,
+  onReport,
+}: {
+  station: Station;
+  open: boolean;
+  km: number;
+  from: { latitude: number; longitude: number };
+  onReport: () => void;
+}) {
+  const today = (new Date().getDay() + 6) % 7; // Monday = 0
+  const allDay = station.hours === '24 Hours';
+  // count each connector type on site
+  const counts = stationConnectors(station).reduce<Partial<Record<ConnectorKey, number>>>((m, c) => ({ ...m, [c.type]: (m[c.type] ?? 0) + 1 }), {});
+
+  return (
+    <>
+      {/* where */}
+      <View style={styles.card}>
+        <View style={styles.mapBox}>
+          <LiveMap
+            pins={[{ id: station.id, latitude: station.latitude, longitude: station.longitude, available: freeConnectorCount(station) > 0 }]}
+            user={from}
+            fit={[[station.longitude, station.latitude]]}
+            interactive={false}
+            padding={{ top: 60, bottom: 20, left: 40, right: 40 }}
+          />
+        </View>
+        <View style={styles.cardPad}>
+          <Text style={styles.infoTitle}>
+            {station.address}, {station.city}
+          </Text>
+          <Text style={styles.infoSub}>{kmLabel(km)} from you</Text>
+          <TouchableOpacity style={styles.outlineBtn} onPress={() => Linking.openURL(directionsUrl(station))} activeOpacity={0.8}>
+            <Ionicons name="navigate-outline" size={16} color={Palette.forest} />
+            <Text style={styles.outlineText}>Get directions</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* when */}
+      <View style={[styles.card, styles.cardPad]}>
+        <View style={styles.cardHead}>
+          <Text style={styles.cardTitle}>Opening hours</Text>
+          <Text style={[styles.statusPill, open ? styles.statusOpen : styles.statusClosed]}>{open ? 'Open now' : 'Closed now'}</Text>
+        </View>
+        {DAYS.map((d, i) => (
+          <View key={d} style={[styles.dayRow, i === today && styles.dayToday]}>
+            <Text style={[styles.dayName, i === today && styles.dayStrong]}>{i === today ? `${d} (today)` : d}</Text>
+            <Text style={[styles.dayHours, i === today && styles.dayStrong]}>{allDay ? 'Open 24 hours' : station.hours}</Text>
+          </View>
+        ))}
+      </View>
+
+      {/* price */}
+      <View style={[styles.card, styles.cardPad]}>
+        <Text style={styles.cardTitle}>Price &amp; payment</Text>
+        <View style={styles.priceRow}>
+          <Text style={styles.priceBig}>₹{station.pricePerKwh}</Text>
+          <Text style={styles.priceUnit}>per kWh</Text>
+        </View>
+        <Text style={styles.infoSub}>You pay only for the energy your car takes, with a receipt after every charge.</Text>
+        <View style={styles.payRow}>
+          {[
+            { icon: 'phone-portrait-outline', label: 'UPI' },
+            { icon: 'card-outline', label: 'Card' },
+            { icon: 'wallet-outline', label: 'EVIT wallet' },
+          ].map((p) => (
+            <View key={p.label} style={styles.payPill}>
+              <Ionicons name={p.icon as keyof typeof Ionicons.glyphMap} size={15} color={Palette.forest} />
+              <Text style={styles.payText}>{p.label}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+
+      {/* connectors */}
+      <View style={[styles.card, styles.cardPad]}>
+        <Text style={styles.cardTitle}>Connectors here</Text>
+        <View style={styles.connGrid}>
+          {(Object.keys(counts) as ConnectorKey[]).map((k) => (
+            <View key={k} style={styles.connTile}>
+              <ConnectorIcon type={k} size={40} original />
+              <Text style={styles.connTileLabel} numberOfLines={1}>
+                {CONNECTORS[k].label}
+              </Text>
+              <Text style={styles.connTileCount}>
+                {counts[k]} × {CONNECTORS[k].current}
+              </Text>
+            </View>
+          ))}
+        </View>
+      </View>
+
+      {/* about */}
+      <View style={styles.card}>
+        <View style={styles.aboutRow}>
+          <Ionicons name="business-outline" size={18} color={Palette.forest} />
+          <Text style={styles.aboutText}>Operated by EVI Technologies</Text>
+        </View>
+        <View style={[styles.aboutRow, styles.aboutDivider]}>
+          <Ionicons name="pricetag-outline" size={18} color={Palette.forest} />
+          <Text style={styles.aboutText}>Station ID {station.id.toUpperCase()}</Text>
+        </View>
+        <TouchableOpacity style={[styles.aboutRow, styles.aboutDivider]} onPress={onReport} activeOpacity={0.7}>
+          <Ionicons name="alert-circle-outline" size={18} color={Palette.red} />
+          <Text style={[styles.aboutText, { color: Palette.red, flex: 1 }]}>Report a problem with this station</Text>
+          <Ionicons name="chevron-forward" size={17} color={Palette.mistLight} />
+        </TouchableOpacity>
+      </View>
+    </>
+  );
+}
+
+// ---------- Nearby tab ----------
+
+function NearbyTab({ station, amenities }: { station: Station; amenities: Amenity[] }) {
+  const [kind, setKind] = useState<AmenityKind | 'all'>('all');
+  if (!amenities.length) return <Text style={styles.emptyText}>No places listed near this station yet.</Text>;
+
+  const onSite = amenities.filter((a) => !a.distanceM);
+  const walk = amenities.filter((a) => a.distanceM).sort((a, b) => a.distanceM - b.distanceM);
+  const kinds = [...new Set(walk.map((a) => a.kind))];
+  const shown = kind === 'all' ? walk : walk.filter((a) => a.kind === kind);
+  const walkTo = (a: Amenity) =>
+    Linking.openURL(
+      `https://www.google.com/maps/dir/?api=1&origin=${station.latitude},${station.longitude}&destination=${encodeURIComponent(`${a.name}, ${station.address}, ${station.city}`)}&travelmode=walking`,
+    );
+
+  return (
+    <>
+      {onSite.length ? (
+        <View style={[styles.card, styles.cardPad]}>
+          <Text style={styles.cardTitle}>At the station</Text>
+          <View style={styles.onSiteRow}>
+            {onSite.map((a) => {
+              const k = AMENITY[a.kind];
+              return (
+                <View key={a.name} style={[styles.onSite, { backgroundColor: k.tint }]}>
+                  <MaterialCommunityIcons name={k.icon} size={16} color={k.ink} />
+                  <Text style={[styles.onSiteText, { color: k.ink }]}>{a.name}</Text>
+                </View>
+              );
+            })}
+          </View>
+        </View>
+      ) : null}
+
+      {walk.length ? (
+        <>
+          <View style={styles.cardHead}>
+            <Text style={styles.cardTitle}>Walk to while you charge</Text>
+            <Text style={styles.tabNote}>{walk.length} places</Text>
+          </View>
+          {kinds.length > 1 ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow} style={styles.filterScroll}>
+              {(['all', ...kinds] as const).map((k) => (
+                <TouchableOpacity key={k} onPress={() => setKind(k)} activeOpacity={0.85} style={[styles.filter, kind === k && styles.filterOn]}>
+                  {k !== 'all' ? <MaterialCommunityIcons name={AMENITY[k].icon} size={14} color={kind === k ? Palette.white : AMENITY[k].ink} /> : null}
+                  <Text style={[styles.filterText, kind === k && styles.filterTextOn]}>{k === 'all' ? 'All' : AMENITY[k].label}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          ) : null}
+          <View style={styles.card}>
+            {shown.map((a, i) => {
+              const k = AMENITY[a.kind];
+              const mins = Math.max(1, Math.round(a.distanceM / WALK_M_PER_MIN));
+              return (
+                <View key={a.name} style={[styles.placeRow, i > 0 && styles.connDivider]}>
+                  <View style={[styles.placeIcon, { backgroundColor: k.tint }]}>
+                    <MaterialCommunityIcons name={k.icon} size={22} color={k.ink} />
+                  </View>
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={styles.placeName} numberOfLines={1}>
+                      {a.name}
+                    </Text>
+                    <Text style={styles.placeMeta}>
+                      {k.label} · {mins} min walk · {a.distanceM} m
+                    </Text>
+                  </View>
+                  <TouchableOpacity style={styles.walkBtn} onPress={() => walkTo(a)} activeOpacity={0.8} accessibilityLabel={`Walking directions to ${a.name}`}>
+                    <MaterialCommunityIcons name="walk" size={18} color={Palette.forest} />
+                  </TouchableOpacity>
+                </View>
+              );
+            })}
+          </View>
+        </>
+      ) : null}
+    </>
+  );
+}
+
+// ---------- Reviews tab ----------
 
 function Stars({ value, size = 14 }: { value: number; size?: number }) {
   return (
@@ -448,16 +591,43 @@ function Stars({ value, size = 14 }: { value: number; size?: number }) {
   );
 }
 
-function Ratings({ station, myRating, onRate }: { station: Station; myRating: number; onRate: (n: number) => void }) {
+function ReviewsTab({ station, rating, ratingCount, mine }: { station: Station; rating: number; ratingCount: number; mine?: Review }) {
   const e = stationExtras(station);
+  const [editing, setEditing] = useState(false);
+  const [stars, setStars] = useState(0);
+  const [tags, setTags] = useState<string[]>([]);
+  const [text, setText] = useState('');
+  const writing = !mine || editing;
+  const tagSet = stars >= 4 ? GOOD_TAGS : BAD_TAGS;
+
+  const startEdit = () => {
+    if (!mine) return;
+    setStars(mine.stars);
+    setTags(mine.tags ?? []);
+    setText(mine.text);
+    setEditing(true);
+  };
+  const pickStars = (n: number) => {
+    // switching between happy and unhappy clears tags that no longer apply
+    if ((n >= 4) !== (stars >= 4)) setTags([]);
+    setStars(n);
+  };
+  const post = () => {
+    submitReview(station.id, { stars, text, tags });
+    setEditing(false);
+    setStars(0);
+    setTags([]);
+    setText('');
+  };
+
   return (
     <>
       <View style={[styles.card, styles.cardPad]}>
         <View style={styles.ratingTop}>
           <View style={styles.ratingBig}>
-            <Text style={styles.ratingValue}>{e.rating.toFixed(1)}</Text>
-            <Stars value={e.rating} />
-            <Text style={styles.ratingCount}>{e.reviewCount} ratings</Text>
+            <Text style={styles.ratingValue}>{rating.toFixed(1)}</Text>
+            <Stars value={rating} />
+            <Text style={styles.ratingCount}>{ratingCount} ratings</Text>
           </View>
           <View style={{ flex: 1, gap: 4 }}>
             {e.breakdown.map((share, i) => (
@@ -470,35 +640,95 @@ function Ratings({ station, myRating, onRate }: { station: Station; myRating: nu
             ))}
           </View>
         </View>
+      </View>
 
-        <View style={styles.rateBox}>
-          <Text style={styles.rateTitle}>{myRating ? 'Thanks for rating!' : 'Charged here? Rate your visit'}</Text>
-          <View style={{ flexDirection: 'row', gap: Spacing.sm }}>
+      {writing ? (
+        <View style={[styles.card, styles.cardPad, styles.rateCard]}>
+          <Text style={styles.cardTitle}>{mine ? 'Edit your review' : 'Rate this station'}</Text>
+          <Text style={styles.infoSub}>Charged here? Your rating helps other drivers.</Text>
+          <View style={styles.bigStars}>
             {[1, 2, 3, 4, 5].map((i) => (
-              <TouchableOpacity key={i} onPress={() => onRate(i)} hitSlop={6} accessibilityLabel={`${i} star`}>
-                <Ionicons name={myRating >= i ? 'star' : 'star-outline'} size={28} color={Palette.amber} />
+              <TouchableOpacity key={i} onPress={() => pickStars(i)} hitSlop={6} accessibilityLabel={`${i} star${i > 1 ? 's' : ''}`}>
+                <Ionicons name={stars >= i ? 'star' : 'star-outline'} size={36} color={Palette.amber} />
               </TouchableOpacity>
             ))}
           </View>
-        </View>
-      </View>
+          <Text style={styles.starWord}>{stars ? STAR_WORDS[stars] : 'Tap a star to rate'}</Text>
 
-      {e.reviews.map((r) => (
-        <View key={r.id} style={styles.review}>
-          <View style={styles.reviewHead}>
-            <View style={styles.reviewAvatar}>
-              <Text style={styles.reviewInitial}>{r.name[0]}</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.reviewName}>{r.name}</Text>
-              <Text style={styles.reviewDate}>{r.date}</Text>
-            </View>
-            <Stars value={r.stars} size={12} />
-          </View>
-          <Text style={styles.reviewText}>{r.text}</Text>
+          {stars ? (
+            <>
+              <Text style={styles.fieldLabel}>{stars >= 4 ? 'What went well?' : 'What went wrong?'}</Text>
+              <View style={styles.tagWrap}>
+                {tagSet.map((t) => {
+                  const on = tags.includes(t);
+                  return (
+                    <TouchableOpacity key={t} onPress={() => setTags(on ? tags.filter((x) => x !== t) : [...tags, t])} activeOpacity={0.85} style={[styles.tag, on && styles.tagOn]}>
+                      {on ? <Ionicons name="checkmark" size={13} color={Palette.white} /> : null}
+                      <Text style={[styles.tagText, on && styles.tagTextOn]}>{t}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              <TextInput
+                value={text}
+                onChangeText={setText}
+                placeholder="Tell others about your visit (optional)"
+                placeholderTextColor={Palette.mistLight}
+                multiline
+                maxLength={300}
+                style={styles.input}
+              />
+              <View style={styles.formBtns}>
+                {editing ? (
+                  <TouchableOpacity style={styles.cancelBtn} onPress={() => setEditing(false)} activeOpacity={0.8}>
+                    <Text style={styles.cancelText}>Cancel</Text>
+                  </TouchableOpacity>
+                ) : null}
+                <VoltButton label={mine ? 'Update review' : 'Post review'} onPress={post} style={{ flex: 1 }} />
+              </View>
+            </>
+          ) : null}
         </View>
+      ) : null}
+
+      {mine && !editing ? <ReviewCard r={mine} own onEdit={startEdit} /> : null}
+      {e.reviews.map((r) => (
+        <ReviewCard key={r.id} r={r} />
       ))}
     </>
+  );
+}
+
+function ReviewCard({ r, own, onEdit }: { r: Review; own?: boolean; onEdit?: () => void }) {
+  return (
+    <View style={[styles.review, own && styles.reviewOwn]}>
+      <View style={styles.reviewHead}>
+        <View style={[styles.reviewAvatar, own && { backgroundColor: Palette.forest }]}>
+          <Text style={[styles.reviewInitial, own && { color: Palette.white }]}>{r.name[0]}</Text>
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.reviewName}>{own ? `${r.name} (you)` : r.name}</Text>
+          <Text style={styles.reviewDate}>{r.date}</Text>
+        </View>
+        <Stars value={r.stars} size={12} />
+      </View>
+      {r.tags?.length ? (
+        <View style={styles.tagWrap}>
+          {r.tags.map((t) => (
+            <Text key={t} style={styles.reviewTag}>
+              {t}
+            </Text>
+          ))}
+        </View>
+      ) : null}
+      {r.text ? <Text style={styles.reviewText}>{r.text}</Text> : null}
+      {own ? (
+        <TouchableOpacity onPress={onEdit} hitSlop={8} style={styles.editLink}>
+          <Ionicons name="create-outline" size={15} color={Palette.forest} />
+          <Text style={styles.editText}>Edit review</Text>
+        </TouchableOpacity>
+      ) : null}
+    </View>
   );
 }
 
@@ -548,55 +778,91 @@ const styles = scaledSheet({
   busyLink: { fontFamily: Font.bold, color: Palette.amberDeep, textDecorationLine: 'underline' },
   busyNote: { fontFamily: Font.regular, fontSize: 13, color: Palette.amberDeep, backgroundColor: Palette.amberSoft, borderRadius: Radius.chip, padding: Spacing.md, overflow: 'hidden' },
 
-  charger: { backgroundColor: Palette.surface, borderRadius: Radius.card, padding: Spacing.md, gap: 4, ...Shadow.soft },
+  // chargers
+  charger: { backgroundColor: Palette.surface, borderRadius: Radius.card, padding: Spacing.md, ...Shadow.soft },
   chargerOff: { backgroundColor: Palette.surfaceAlt },
-  chHead: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, paddingBottom: Spacing.sm, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Palette.line },
-  currentBadge: { width: 40, height: 40, borderRadius: Radius.chip, alignItems: 'center', justifyContent: 'center' },
+  chHead: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
+  currentBadge: { flexDirection: 'row', gap: 2, height: 42, paddingHorizontal: 10, borderRadius: Radius.chip, alignItems: 'center', justifyContent: 'center' },
   dcBadge: { backgroundColor: Palette.volt },
   acBadge: { backgroundColor: Palette.voltSoft },
   badgeOff: { backgroundColor: Palette.canvasDeep },
   currentText: { fontFamily: Font.display, fontSize: 13, color: Palette.forest },
-  serial: { fontFamily: Font.displaySemi, fontSize: 15, color: Palette.ink },
+  serial: { fontFamily: Font.displaySemi, fontSize: 16, color: Palette.ink },
   chMeta: { fontFamily: Font.regular, fontSize: 12, color: Palette.mist, marginTop: 1 },
   onlineRow: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: Palette.voltSofter, borderRadius: Radius.pill, paddingHorizontal: 8, paddingVertical: 4 },
   onlineRowOff: { backgroundColor: Palette.canvasDeep },
   onlineDot: { width: 7, height: 7, borderRadius: 4 },
   onlineText: { fontFamily: Font.semibold, fontSize: 12, color: Palette.forest },
+  segRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, marginTop: Spacing.md, marginBottom: Spacing.xs, paddingBottom: Spacing.md, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Palette.line },
+  segs: { flex: 1, flexDirection: 'row', gap: 4 },
+  seg: { flex: 1, height: 6, borderRadius: 3 },
+  segText: { fontFamily: Font.semibold, fontSize: 12, color: Palette.inkSoft },
 
-  connRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, paddingVertical: 6 },
-  iconBox: { width: 40, height: 40, borderRadius: Radius.chip, backgroundColor: Palette.voltSofter, alignItems: 'center', justifyContent: 'center' },
-  iconBoxMuted: { backgroundColor: Palette.canvasDeep },
+  connRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, paddingVertical: Spacing.md },
+  connDivider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: Palette.lineSoft },
+  iconBox: { width: 54, height: 54, borderRadius: 16, backgroundColor: Palette.surface, borderWidth: 1, borderColor: Palette.line, alignItems: 'center', justifyContent: 'center' },
+  iconBoxMuted: { backgroundColor: Palette.surfaceAlt },
   connTitleRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  connType: { flexShrink: 1, fontFamily: Font.semibold, fontSize: 14, color: Palette.ink },
+  connType: { flexShrink: 1, fontFamily: Font.semibold, fontSize: 15, color: Palette.ink },
   fitsTag: { fontFamily: Font.bold, fontSize: 10, color: Palette.forest, backgroundColor: Palette.voltSoft, borderRadius: Radius.pill, paddingHorizontal: 7, paddingVertical: 2, overflow: 'hidden' },
-  connMeta: { fontFamily: Font.regular, fontSize: 12, color: Palette.mist, marginTop: 1 },
-  startBtn: { backgroundColor: Palette.forest, borderRadius: Radius.pill, paddingHorizontal: Spacing.lg, paddingVertical: 8 },
+  connMeta: { fontFamily: Font.regular, fontSize: 13, color: Palette.mist, marginTop: 2 },
+  startBtn: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: Palette.forest, borderRadius: Radius.pill, paddingHorizontal: 14, paddingVertical: 9 },
   startOff: { opacity: 0.4 },
   startText: { fontFamily: Font.bold, fontSize: 13, color: Palette.white },
-  mineBtn: { backgroundColor: Palette.voltSoft, borderRadius: Radius.pill, paddingHorizontal: Spacing.md, paddingVertical: 8, borderWidth: 1, borderColor: Palette.volt },
+  mineBtn: { backgroundColor: Palette.voltSoft, borderRadius: Radius.pill, paddingHorizontal: Spacing.lg, paddingVertical: 9, borderWidth: 1, borderColor: Palette.volt },
   mineText: { fontFamily: Font.bold, fontSize: 13, color: Palette.forest },
-  statePill: { backgroundColor: Palette.canvasDeep, borderRadius: Radius.pill, paddingHorizontal: Spacing.md, paddingVertical: 6 },
-  inUsePill: { backgroundColor: Palette.amberSoft },
-  stateText: { fontFamily: Font.semibold, fontSize: 12, color: Palette.mist },
 
-  card: { backgroundColor: Palette.surface, borderRadius: Radius.card, ...Shadow.soft },
-  cardPad: { padding: Spacing.lg, gap: Spacing.lg },
-  infoRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, padding: Spacing.md, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Palette.line },
-  infoIcon: { width: 38, height: 38, borderRadius: 19, backgroundColor: Palette.voltSofter, alignItems: 'center', justifyContent: 'center', alignSelf: 'flex-start' },
-  infoTitle: { fontFamily: Font.semibold, fontSize: 14, color: Palette.ink },
-  infoSub: { fontFamily: Font.regular, fontSize: 13, color: Palette.mist, marginTop: 2 },
-  infoLink: { color: Palette.forest, fontFamily: Font.semibold },
-  typeWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  typePill: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: Palette.voltSofter, borderRadius: Radius.pill, paddingHorizontal: 9, paddingVertical: 5 },
-  typeText: { fontFamily: Font.semibold, fontSize: 12, color: Palette.inkSoft },
+  // cards shared by Info / Nearby / Reviews
+  card: { backgroundColor: Palette.surface, borderRadius: Radius.card, overflow: 'hidden', ...Shadow.soft },
+  cardPad: { padding: Spacing.lg, gap: Spacing.sm },
+  cardHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: Spacing.sm },
+  cardTitle: { fontFamily: Font.displaySemi, fontSize: 16, color: Palette.ink },
+  infoTitle: { fontFamily: Font.semibold, fontSize: 15, color: Palette.ink },
+  infoSub: { fontFamily: Font.regular, fontSize: 13, color: Palette.mist, lineHeight: 18 },
 
-  placeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
-  place: { flexBasis: '46%', flexGrow: 1, borderRadius: Radius.card, padding: Spacing.md, gap: Spacing.sm },
-  placeIcon: { width: 42, height: 42, borderRadius: 21, backgroundColor: Palette.white, alignItems: 'center', justifyContent: 'center' },
-  placeName: { fontFamily: Font.displaySemi, fontSize: 14, color: Palette.ink, lineHeight: 19 },
-  placeFoot: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  placeDist: { fontFamily: Font.semibold, fontSize: 12 },
+  // info
+  mapBox: { height: 150, backgroundColor: Palette.canvasDeep },
+  outlineBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: Spacing.sm, borderWidth: 1.5, borderColor: Palette.brandTint2, borderRadius: Radius.pill, paddingVertical: 10 },
+  outlineText: { fontFamily: Font.bold, fontSize: 14, color: Palette.forest },
+  statusPill: { fontFamily: Font.bold, fontSize: 12, borderRadius: Radius.pill, paddingHorizontal: 9, paddingVertical: 3, overflow: 'hidden' },
+  statusOpen: { color: Palette.forest, backgroundColor: Palette.voltSoft },
+  statusClosed: { color: Palette.red, backgroundColor: Palette.redSoft },
+  dayRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6, paddingHorizontal: Spacing.sm, borderRadius: 10 },
+  dayToday: { backgroundColor: Palette.voltSofter },
+  dayName: { fontFamily: Font.regular, fontSize: 14, color: Palette.inkSoft },
+  dayHours: { fontFamily: Font.medium, fontSize: 14, color: Palette.inkSoft },
+  dayStrong: { fontFamily: Font.bold, color: Palette.ink },
+  priceRow: { flexDirection: 'row', alignItems: 'baseline', gap: 6 },
+  priceBig: { fontFamily: Font.display, fontSize: 30, color: Palette.forest },
+  priceUnit: { fontFamily: Font.semibold, fontSize: 14, color: Palette.mist },
+  payRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm, marginTop: Spacing.xs },
+  payPill: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: Palette.voltSofter, borderRadius: Radius.pill, paddingHorizontal: 11, paddingVertical: 7 },
+  payText: { fontFamily: Font.semibold, fontSize: 13, color: Palette.ink },
+  connGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm, marginTop: Spacing.xs },
+  connTile: { flexBasis: '30%', flexGrow: 1, alignItems: 'center', gap: 4, backgroundColor: Palette.surfaceAlt, borderRadius: 16, borderWidth: 1, borderColor: Palette.lineSoft, paddingVertical: Spacing.md, paddingHorizontal: 6 },
+  connTileLabel: { fontFamily: Font.semibold, fontSize: 12, color: Palette.ink },
+  connTileCount: { fontFamily: Font.medium, fontSize: 11, color: Palette.mist },
+  aboutRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md },
+  aboutDivider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: Palette.line },
+  aboutText: { fontFamily: Font.medium, fontSize: 14, color: Palette.inkSoft },
 
+  // nearby
+  onSiteRow: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+  onSite: { flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: Radius.pill, paddingHorizontal: 11, paddingVertical: 7 },
+  onSiteText: { fontFamily: Font.semibold, fontSize: 13 },
+  filterScroll: { marginHorizontal: -Spacing.lg },
+  filterRow: { paddingHorizontal: Spacing.lg, gap: Spacing.sm },
+  filter: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: Palette.surface, borderRadius: Radius.pill, borderWidth: 1, borderColor: Palette.line, paddingHorizontal: 12, paddingVertical: 7 },
+  filterOn: { backgroundColor: Palette.ink, borderColor: Palette.ink },
+  filterText: { fontFamily: Font.semibold, fontSize: 13, color: Palette.inkSoft },
+  filterTextOn: { color: Palette.white },
+  placeRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, paddingHorizontal: Spacing.md, paddingVertical: Spacing.md },
+  placeIcon: { width: 46, height: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  placeName: { fontFamily: Font.semibold, fontSize: 15, color: Palette.ink },
+  placeMeta: { fontFamily: Font.regular, fontSize: 12, color: Palette.mist, marginTop: 2 },
+  walkBtn: { width: 40, height: 40, borderRadius: 20, borderWidth: 1.5, borderColor: Palette.brandTint2, alignItems: 'center', justifyContent: 'center' },
+
+  // reviews
   ratingTop: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xl },
   ratingBig: { alignItems: 'center', gap: 3 },
   ratingValue: { fontFamily: Font.display, fontSize: 36, color: Palette.ink, lineHeight: 40 },
@@ -605,14 +871,29 @@ const styles = scaledSheet({
   barLabel: { fontFamily: Font.semibold, fontSize: 11, color: Palette.mist, width: 8 },
   barTrack: { flex: 1, height: 6, borderRadius: 3, backgroundColor: Palette.canvasDeep, overflow: 'hidden' },
   barFill: { height: 6, borderRadius: 3, backgroundColor: Palette.amber },
-  rateBox: { alignItems: 'center', gap: Spacing.sm, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: Palette.line, paddingTop: Spacing.lg },
-  rateTitle: { fontFamily: Font.semibold, fontSize: 14, color: Palette.ink },
+  rateCard: { borderWidth: 1, borderColor: Palette.brandTint2 },
+  bigStars: { flexDirection: 'row', justifyContent: 'center', gap: Spacing.md, marginTop: Spacing.sm },
+  starWord: { fontFamily: Font.semibold, fontSize: 14, color: Palette.amberDeep, textAlign: 'center' },
+  fieldLabel: { fontFamily: Font.semibold, fontSize: 14, color: Palette.ink, marginTop: Spacing.sm },
+  tagWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  tag: { flexDirection: 'row', alignItems: 'center', gap: 4, borderRadius: Radius.pill, borderWidth: 1, borderColor: Palette.line, backgroundColor: Palette.surface, paddingHorizontal: 11, paddingVertical: 7 },
+  tagOn: { backgroundColor: Palette.forest, borderColor: Palette.forest },
+  tagText: { fontFamily: Font.semibold, fontSize: 13, color: Palette.inkSoft },
+  tagTextOn: { color: Palette.white },
+  input: { minHeight: 90, borderRadius: 14, borderWidth: 1, borderColor: Palette.line, backgroundColor: Palette.surfaceAlt, padding: Spacing.md, fontFamily: Font.regular, fontSize: 14, color: Palette.ink, textAlignVertical: 'top', marginTop: Spacing.xs },
+  formBtns: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginTop: Spacing.xs },
+  cancelBtn: { paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md },
+  cancelText: { fontFamily: Font.semibold, fontSize: 15, color: Palette.mist },
 
   review: { backgroundColor: Palette.surface, borderRadius: Radius.card, padding: Spacing.lg, gap: Spacing.sm, ...Shadow.soft },
+  reviewOwn: { borderWidth: 1.5, borderColor: Palette.brandTint2 },
   reviewHead: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   reviewAvatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: Palette.voltSoft, alignItems: 'center', justifyContent: 'center' },
   reviewInitial: { fontFamily: Font.bold, fontSize: 14, color: Palette.forest },
   reviewName: { fontFamily: Font.semibold, fontSize: 14, color: Palette.ink },
   reviewDate: { fontFamily: Font.regular, fontSize: 12, color: Palette.mist },
+  reviewTag: { fontFamily: Font.semibold, fontSize: 11, color: Palette.forest, backgroundColor: Palette.voltSofter, borderRadius: Radius.pill, paddingHorizontal: 8, paddingVertical: 3, overflow: 'hidden' },
   reviewText: { fontFamily: Font.regular, fontSize: 14, lineHeight: 20, color: Palette.inkSoft },
+  editLink: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start' },
+  editText: { fontFamily: Font.semibold, fontSize: 13, color: Palette.forest },
 });

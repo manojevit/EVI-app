@@ -17,7 +17,7 @@ type Sort = (typeof SORTS)[number];
 
 const GUTTER = 16;
 const CARD_GAP = 10;
-const CARD_H = 118; // swipe card height incl. border (before scaling)
+const CARD_H = 78; // swipe card height incl. border (before scaling)
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -73,7 +73,7 @@ export default function HomeScreen() {
   }, [location.latitude, location.longitude, location.live]);
 
   // swipe cards ↔ map pins
-  const step = Math.min(width - GUTTER * 2 - 26, s(400)) + CARD_GAP;
+  const step = Math.min(width - GUTTER * 2 - 44, s(330)) + CARD_GAP;
   const cardW = step - CARD_GAP;
   const select = (id: string) => {
     setSelectedId(id);
@@ -136,7 +136,7 @@ export default function HomeScreen() {
         <>
           <LiveMap
             ref={mapRef}
-            pins={matching.map((st) => ({ id: st.id, latitude: st.latitude, longitude: st.longitude, available: st.status === 'Available' }))}
+            pins={matching.map((st) => ({ id: st.id, latitude: st.latitude, longitude: st.longitude, available: freeConnectorCount(st) > 0, free: freeConnectorCount(st) }))}
             user={location}
             fit={fitNearby(location, nearby)}
             // keep pins clear of the search bar + chips above, the cards + tab bar below and the buttons on the right
@@ -153,9 +153,10 @@ export default function HomeScreen() {
                 horizontal
                 data={nearby}
                 keyExtractor={(st) => st.id}
-                renderItem={({ item }) => <StationCard station={item} selected={item.id === selectedId} style={{ width: cardW, height: cardH }} />}
+                renderItem={({ item }) => <StationCard station={item} compact selected={item.id === selectedId} style={{ width: cardW, height: cardH }} />}
                 showsHorizontalScrollIndicator={false}
                 snapToInterval={step}
+                snapToAlignment="start"
                 decelerationRate="fast"
                 disableIntervalMomentum
                 contentContainerStyle={{ paddingHorizontal: s(GUTTER), gap: CARD_GAP, paddingBottom: 6 }}
