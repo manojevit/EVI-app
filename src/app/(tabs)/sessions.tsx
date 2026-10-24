@@ -7,6 +7,7 @@ import { Animated as RNAnimated, ScrollView, StyleSheet, Text, TouchableOpacity,
 import Animated, { Easing, cancelAnimation, useAnimatedStyle, useSharedValue, withRepeat, withTiming, type SharedValue } from 'react-native-reanimated';
 
 import AppHeader from '@/components/app-header';
+import ConfirmDialog from '@/components/confirm-dialog';
 import VoltButton from '@/components/volt-button';
 import { s as scale, scaledSheet } from '@/constants/responsive';
 import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
@@ -87,19 +88,12 @@ function LiveView({ session }: { session: LiveSession }) {
   const router = useRouter();
   const now = useNow(1000);
   const [confirming, setConfirming] = useState(false);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const scrollRef = useRef<any>(null);
   const { station, charger, connector } = sessionParts(session);
   const r = sessionReadout(session, now);
   const vehicle = useAppStore((st) => st.vehicles[0]);
   const typeLabel = CONNECTORS[connector.type].label;
   const showSoc = r.dc && r.soc != null;
 
-  const askStop = () => {
-    setConfirming(true);
-    // bring the confirm card above the tab bar
-    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 50);
-  };
   const stop = () => {
     const id = stopSession();
     setConfirming(false);
@@ -107,7 +101,7 @@ function LiveView({ session }: { session: LiveSession }) {
   };
 
   return (
-    <ScrollView ref={scrollRef} contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+    <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
       <LinearGradient colors={Palette.gradHero} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={styles.hero}>
         <View style={styles.heroTop}>
           <View style={styles.statusPill}>
@@ -177,20 +171,26 @@ function LiveView({ session }: { session: LiveSession }) {
         <Stat icon="wallet-outline" value={formatINR(r.costINR)} a11y="Cost so far" />
       </View>
 
-      {confirming ? (
-        <View style={styles.confirm}>
-          <Text style={styles.confirmTitle}>Stop charging?</Text>
-          <Text style={styles.confirmText}>
-            You&apos;ve added {r.energyKwh.toFixed(2)} kWh for {formatINR(r.costINR)}. It will be taken from your wallet.
-          </Text>
-          <View style={styles.confirmRow}>
-            <VoltButton label="Keep charging" variant="outline" onPress={() => setConfirming(false)} style={{ flex: 1 }} />
-            <VoltButton label="Stop" icon="stop" variant="danger" onPress={stop} style={{ flex: 1 }} />
-          </View>
+      <VoltButton label="Stop charging" icon="stop" variant="danger" onPress={() => setConfirming(true)} style={{ marginTop: Spacing.sm }} />
+
+      <ConfirmDialog
+        visible={confirming}
+        icon="stop-circle-outline"
+        title="Stop charging?"
+        message="The total is taken from your wallet and your receipt opens next."
+        confirmLabel="Stop charging"
+        cancelLabel="Keep charging"
+        onCancel={() => setConfirming(false)}
+        onConfirm={stop}>
+        {/* what this charge comes to so far */}
+        <View style={styles.stopSummary}>
+          <SummaryItem icon="battery-charging" value={`${r.energyKwh.toFixed(2)} kWh`} />
+          <View style={styles.statLine} />
+          <SummaryItem icon="time-outline" value={formatDuration(r.seconds)} />
+          <View style={styles.statLine} />
+          <SummaryItem icon="wallet-outline" value={formatINR(r.costINR)} strong />
         </View>
-      ) : (
-        <VoltButton label="Stop charging" icon="stop" variant="danger" onPress={askStop} style={{ marginTop: Spacing.sm }} />
-      )}
+      </ConfirmDialog>
     </ScrollView>
   );
 }
@@ -235,6 +235,17 @@ function FlowDot({ flow, offset }: { flow: SharedValue<number>; offset: number }
     return { opacity: Math.sin(p * Math.PI), transform: [{ translateX: cable * (1 - p) - 4 }] };
   });
   return <Animated.View style={[styles.flowDot, style]} />;
+}
+
+function SummaryItem({ icon, value, strong }: { icon: keyof typeof Ionicons.glyphMap; value: string; strong?: boolean }) {
+  return (
+    <View style={styles.summaryItem}>
+      <Ionicons name={icon} size={16} color={Palette.forest} />
+      <Text style={[styles.summaryValue, strong && { color: Palette.ink }]} numberOfLines={1} adjustsFontSizeToFit>
+        {value}
+      </Text>
+    </View>
+  );
 }
 
 /** One big number in the hero, icon first, no label. */
@@ -325,8 +336,7 @@ const styles = scaledSheet({
   statUnit: { fontFamily: Font.medium, fontSize: 12, color: Palette.mist },
   statLine: { width: StyleSheet.hairlineWidth, alignSelf: 'stretch', marginVertical: 6, backgroundColor: Palette.line },
 
-  confirm: { backgroundColor: Palette.surface, borderRadius: Radius.card, padding: Spacing.lg, gap: Spacing.sm, borderWidth: 1, borderColor: Palette.redSoft, ...Shadow.soft },
-  confirmTitle: { fontFamily: Font.displaySemi, fontSize: 17, color: Palette.ink },
-  confirmText: { fontFamily: Font.regular, fontSize: 14, lineHeight: 20, color: Palette.mist },
-  confirmRow: { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.sm },
+  stopSummary: { flexDirection: 'row', alignItems: 'center', alignSelf: 'stretch', backgroundColor: Palette.voltSofter, borderRadius: 14, borderWidth: 1, borderColor: Palette.brandTint2, paddingVertical: 10, marginTop: Spacing.lg },
+  summaryItem: { flex: 1, alignItems: 'center', gap: 4, paddingHorizontal: 4 },
+  summaryValue: { fontFamily: Font.displaySemi, fontSize: 14, color: Palette.inkSoft },
 });

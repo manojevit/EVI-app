@@ -10,25 +10,21 @@ import ConfirmDialog from '@/components/confirm-dialog';
 import VoltButton from '@/components/volt-button';
 import { scaledSheet } from '@/constants/responsive';
 import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
-import { RFID_CARD_PRICE, formatUid, orderRfidCard, removeRfidCard, setRfidStatus, useAppStore, type RfidCard } from '@/data/app-store';
-import { formatINR } from '@/data/mock';
+import { formatUid, removeRfidCard, setRfidStatus, useAppStore, type RfidCard } from '@/data/app-store';
 
-type Pending = { kind: 'block' | 'remove'; card: RfidCard } | { kind: 'order' } | null;
+type Pending = { kind: 'block' | 'remove'; card: RfidCard } | null;
 
 /** RFID cards: tap a card on the charger to start charging without the phone. */
 export default function RfidScreen() {
   const router = useRouter();
   const cards = useAppStore((st) => st.rfidCards);
   const vehicles = useAppStore((st) => st.vehicles);
-  const balance = useAppStore((st) => st.walletBalance);
   const [pending, setPending] = useState<Pending>(null);
-  const [lowBalance, setLowBalance] = useState(false);
 
   const confirm = () => {
     if (!pending) return;
     if (pending.kind === 'block') setRfidStatus(pending.card.id, 'blocked');
     if (pending.kind === 'remove') removeRfidCard(pending.card.id);
-    if (pending.kind === 'order') setLowBalance(!orderRfidCard());
     setPending(null);
   };
 
@@ -64,18 +60,12 @@ export default function RfidScreen() {
           <View style={styles.empty}>
             <MaterialCommunityIcons name="credit-card-wireless-outline" size={34} color={Palette.forest} />
             <Text style={styles.emptyTitle}>No cards yet</Text>
-            <Text style={styles.emptyText}>Add the EVIT card you have, or order one below.</Text>
+            <Text style={styles.emptyText}>Add your EVIT card below to charge without your phone.</Text>
           </View>
         )}
 
         <View style={styles.buttons}>
-          <VoltButton label={`Order a new card · ₹${RFID_CARD_PRICE}`} icon="cart-outline" onPress={() => setPending({ kind: 'order' })} />
-          <VoltButton label="Add a card you have" icon="add" variant="outline" onPress={() => router.push('/add-rfid' as never)} />
-          {lowBalance ? (
-            <Text style={styles.low} onPress={() => router.push('/wallet')}>
-              Your wallet has {formatINR(balance)}. <Text style={styles.lowLink}>Add money</Text> to order a card.
-            </Text>
-          ) : null}
+          <VoltButton label="Add a card" icon="add" onPress={() => router.push('/add-rfid' as never)} />
         </View>
 
         <View style={styles.how}>
@@ -100,17 +90,14 @@ export default function RfidScreen() {
 
       <ConfirmDialog
         visible={pending != null}
-        icon={pending?.kind === 'order' ? 'card-outline' : pending?.kind === 'remove' ? 'trash-outline' : 'lock-closed-outline'}
-        danger={pending?.kind !== 'order'}
-        title={pending?.kind === 'order' ? 'Order an EVIT card?' : pending?.kind === 'remove' ? 'Remove this card?' : 'Block this card?'}
+        icon={pending?.kind === 'remove' ? 'trash-outline' : 'lock-closed-outline'}
+        title={pending?.kind === 'remove' ? 'Remove this card?' : 'Block this card?'}
         message={
-          pending?.kind === 'order'
-            ? `₹${RFID_CARD_PRICE} is paid from your wallet. The card reaches your address in 5–7 days.`
-            : pending?.kind === 'remove'
-              ? "It's taken off your account and can't start a charge. You can add it again later."
-              : "It won't start a charge until you unblock it. Do this if you've lost the card."
+          pending?.kind === 'remove'
+            ? "It's taken off your account and can't start a charge. You can add it again later."
+            : "It won't start a charge until you unblock it. Do this if you've lost the card."
         }
-        confirmLabel={pending?.kind === 'order' ? `Pay ₹${RFID_CARD_PRICE}` : pending?.kind === 'remove' ? 'Remove card' : 'Block card'}
+        confirmLabel={pending?.kind === 'remove' ? 'Remove card' : 'Block card'}
         onCancel={() => setPending(null)}
         onConfirm={confirm}
       />
@@ -195,8 +182,6 @@ const styles = scaledSheet({
   emptyText: { fontFamily: Font.regular, fontSize: 14, color: Palette.mist, textAlign: 'center' },
 
   buttons: { gap: Spacing.sm },
-  low: { fontFamily: Font.regular, fontSize: 13, color: Palette.red, textAlign: 'center' },
-  lowLink: { fontFamily: Font.bold, color: Palette.forest },
 
   how: { backgroundColor: Palette.surface, borderRadius: Radius.card, padding: Spacing.lg, gap: Spacing.md, ...Shadow.soft },
   howTitle: { fontFamily: Font.displaySemi, fontSize: 16, color: Palette.ink },

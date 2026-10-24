@@ -97,7 +97,6 @@ export interface RfidCard {
   vehicleId?: string;
   addedLabel: string;
 }
-export const RFID_CARD_PRICE = 199;
 
 export interface MapFilters {
   favouritesOnly: boolean;
@@ -566,17 +565,4 @@ export function setRfidStatus(id: string, status: 'active' | 'blocked') {
 }
 export function removeRfidCard(id: string) {
   set({ rfidCards: state.rfidCards.filter((c) => c.id !== id) });
-}
-/** Orders a new card, paid from the wallet. Returns false if the balance is too low. */
-export function orderRfidCard(): boolean {
-  if (state.walletBalance < RFID_CARD_PRICE) return false;
-  set({
-    rfidCards: [
-      ...state.rfidCards,
-      { id: `rf${Date.now()}`, uid: '', name: 'New EVIT card', status: 'ordered', vehicleId: state.vehicles[0]?.id, addedLabel: `Ordered ${today()}` },
-    ],
-    walletBalance: +(state.walletBalance - RFID_CARD_PRICE).toFixed(2),
-    txns: [{ id: `w${Date.now()}`, kind: 'plan', title: 'EVIT RFID card', dateLabel: shortDate(Date.now()), amount: -RFID_CARD_PRICE }, ...state.txns],
-  });
-  return true;
 }

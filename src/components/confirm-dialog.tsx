@@ -1,10 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
+import type { ReactNode } from 'react';
 import { Modal, Pressable, Text, TouchableOpacity, View } from 'react-native';
 
 import { scaledSheet } from '@/constants/responsive';
 import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
 
-/** Centred confirm popup: icon, title, message, Cancel + a (red by default) action. */
+/** Centred confirm popup: icon, title, message, optional details, Cancel + a (red by default) action. */
 export default function ConfirmDialog({
   visible,
   icon,
@@ -13,6 +14,7 @@ export default function ConfirmDialog({
   confirmLabel,
   cancelLabel = 'Cancel',
   danger = true,
+  children,
   onConfirm,
   onCancel,
 }: {
@@ -24,6 +26,8 @@ export default function ConfirmDialog({
   /** label for the button that closes without acting */
   cancelLabel?: string;
   danger?: boolean;
+  /** shown between the message and the buttons, e.g. a summary */
+  children?: ReactNode;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
@@ -38,6 +42,7 @@ export default function ConfirmDialog({
           </View>
           <Text style={styles.title}>{title}</Text>
           <Text style={styles.message}>{message}</Text>
+          {children}
           <View style={styles.buttons}>
             <TouchableOpacity style={[styles.btn, styles.cancel]} onPress={onCancel} activeOpacity={0.8}>
               <Text style={styles.cancelText}>{cancelLabel}</Text>
