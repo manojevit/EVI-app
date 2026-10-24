@@ -228,14 +228,6 @@ const ratedKwOf = (charger: Charger) =>
 const secondsToFull = (charger: Charger, startSoc: number | null) =>
   Math.round(((BATTERY_KWH * (1 - (charger.current === 'DC' && startSoc != null ? startSoc : 40) / 100)) / ratedKwOf(charger)) * 3600);
 
-/** What a charge on this charger would come to, for the start sheet. */
-export function chargeEstimate(station: Station, charger: Charger, limitMins: number | null) {
-  const full = secondsToFull(charger, charger.current === 'DC' ? DEMO_START_SOC : null);
-  const seconds = limitMins ? Math.min(limitMins * 60, full) : full;
-  const kwh = (ratedKwOf(charger) * seconds) / 3600;
-  return { minutes: Math.round(seconds / 60), kwh, costINR: kwh * station.pricePerKwh };
-}
-
 /**
  * Live numbers for a running session at time `now`. Charging stops by itself at the time
  * limit or when the battery is full, so a session left running doesn't keep adding cost.

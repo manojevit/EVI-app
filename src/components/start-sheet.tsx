@@ -1,24 +1,21 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Modal, Pressable, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import ConnectorIcon from '@/components/connector-icon';
 import { APP_MAX_WIDTH, scaledSheet } from '@/constants/responsive';
 import { Font, Palette, Radius, Spacing } from '@/constants/theme';
-import { FREE_CANCEL_MINS, TIME_OPTIONS, chargeEstimate } from '@/data/app-store';
+import { FREE_CANCEL_MINS, RESERVATION_FEE, TIME_OPTIONS } from '@/data/app-store';
 import { CONNECTORS } from '@/data/connectors';
 import type { Charger, Connector, Station } from '@/data/mock';
 import { clock } from '@/data/reservation-helpers';
 
 type Mode = 'time' | 'full';
-const HOLD_WHEN_FULL = 30; // "Until full" has no minutes to pick, so a reservation holds this long
-
-const duration = (m: number) => (m < 60 ? `${m} min` : `${Math.floor(m / 60)} h${m % 60 ? ` ${m % 60} min` : ''}`);
 
 /**
- * Opens when a connector's Start is tapped: charge for a set time or until full,
- * or reserve the connector for the chosen time if you're not there yet.
+ * Opens when a connector's Start is tapped: charge for a set time or until full.
+ * "Reserve now" switches the sheet to a reservation view (hold it for 15–60 min).
  */
 export default function StartSheet({
   station,
@@ -41,104 +38,138 @@ export default function StartSheet({
   onClose: () => void;
 }) {
   const insets = useSafeAreaInsets();
+  const [view, setView] = useState<'start' | 'reserve'>('start');
   const [mode, setMode] = useState<Mode>('time');
   const [mins, setMins] = useState<number>(30);
-  const est = chargeEstimate(station, charger, mode === 'time' ? mins : null);
-  const hold = mode === 'time' ? mins : HOLD_WHEN_FULL;
-  const now = Date.now();
+  const [hold, setHold] = useState<number>(30);
+  const label = CONNECTORS[connector.type].label;
+
+  const openReserve = () => {
+    setHold(mode === 'time' ? mins : 30);
+    setView('reserve');
+  };
 
   return (
-    <Modal visible transparent animationType="slide" statusBarTranslucent onRequestClose={onClose}>
+    <Modal visible transparent animationType="slide" statusBarTranslucent onRequestClose={view === 'reserve' ? () => setView('start') : onClose}>
       <View style={styles.overlay}>
         <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Close" />
         <View style={[styles.sheet, { maxWidth: APP_MAX_WIDTH, paddingBottom: insets.bottom + Spacing.lg }]}>
           <View style={styles.grabber} />
 
-          {/* what you're about to use */}
-          <View style={styles.head}>
-            <View style={styles.iconBox}>
-              <ConnectorIcon type={connector.type} size={30} original />
-            </View>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={styles.title}>{CONNECTORS[connector.type].label}</Text>
-              <Text style={styles.sub} numberOfLines={2}>
-                {charger.serial} · Connector {connector.number} · ₹{station.pricePerKwh}/kWh
-              </Text>
-            </View>
-            <TouchableOpacity onPress={onClose} hitSlop={10} accessibilityLabel="Close">
-              <Ionicons name="close" size={24} color={Palette.mist} />
-            </TouchableOpacity>
-          </View>
+          {view === 'start' ? (
+            <>
+              {/* what you're about to use */}
+              <View style={styles.head}>
+                <View style={styles.iconBox}>
+                  <ConnectorIcon type={connector.type} size={30} original />
+                </View>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={styles.title}>{label}</Text>
+                  <Text style={styles.sub} numberOfLines={2}>
+                    {charger.serial} · Connector {connector.number} · ₹{station.pricePerKwh}/kWh
+                  </Text>
+                </View>
+                <CloseButton onPress={onClose} />
+              </View>
 
-          {/* set time | until full */}
-          <View style={styles.tabs} accessibilityRole="tablist">
-            {(
-              [
-                ['time', 'Set time', 'timer-outline'],
-                ['full', 'Until full', 'battery-charging-outline'],
-              ] as const
-            ).map(([m, label, icon]) => (
+              {/* set time | until full */}
+              <View style={styles.tabs} accessibilityRole="tablist">
+                {(
+                  [
+                    ['time', 'Set time', 'timer-outline'],
+                    ['full', 'Until full', 'battery-charging-outline'],
+                  ] as const
+                ).map(([m, text, icon]) => (
+                  <TouchableOpacity
+                    key={m}
+                    onPress={() => setMode(m)}
+                    activeOpacity={0.85}
+                    style={[styles.tab, mode === m && styles.tabOn]}
+                    accessibilityRole="tab"
+                    accessibilityState={{ selected: mode === m }}>
+                    <Ionicons name={icon} size={15} color={mode === m ? Palette.forest : Palette.mist} />
+                    <Text style={[styles.tabText, mode === m && styles.tabTextOn]}>{text}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {mode === 'time' ? (
+                <MinuteChips value={mins} onChange={setMins} />
+              ) : (
+                <View style={styles.fullNote}>
+                  <Ionicons name="battery-full" size={19} color={Palette.forest} />
+                  <Text style={styles.fullText}>Charges until your battery is full, then stops by itself. You can stop it any time.</Text>
+                </View>
+              )}
+
               <TouchableOpacity
-                key={m}
-                onPress={() => setMode(m)}
-                activeOpacity={0.85}
-                style={[styles.tab, mode === m && styles.tabOn]}
-                accessibilityRole="tab"
-                accessibilityState={{ selected: mode === m }}>
-                <Ionicons name={icon} size={15} color={mode === m ? Palette.forest : Palette.mist} />
-                <Text style={[styles.tabText, mode === m && styles.tabTextOn]}>{label}</Text>
+                style={[styles.startBtn, !canStart && styles.startOff]}
+                activeOpacity={0.88}
+                disabled={!canStart}
+                onPress={() => onStart(mode === 'time' ? mins : null)}>
+                <Ionicons name="flash" size={17} color={Palette.white} />
+                <Text style={styles.startText}>{mode === 'time' ? `Start charging · ${mins} min` : 'Start charging · until full'}</Text>
               </TouchableOpacity>
-            ))}
-          </View>
+              {!canStart ? <Text style={styles.warn}>You&apos;re already charging. Stop that charge first.</Text> : null}
 
-          {mode === 'time' ? (
-            <View style={styles.chips}>
-              {TIME_OPTIONS.map((m) => (
-                <TouchableOpacity key={m} onPress={() => setMins(m)} activeOpacity={0.85} style={[styles.chip, mins === m && styles.chipOn]}>
-                  <Text style={[styles.chipNum, mins === m && styles.chipTextOn]}>{m}</Text>
-                  <Text style={[styles.chipUnit, mins === m && styles.chipTextOn]}>min</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+              {/* not there yet */}
+              <View style={styles.orRow}>
+                <View style={styles.orLine} />
+                <Text style={styles.orText}>Not at the charger yet?</Text>
+                <View style={styles.orLine} />
+              </View>
+              <TouchableOpacity style={styles.reserveBtn} activeOpacity={0.85} onPress={openReserve}>
+                <Ionicons name="calendar-outline" size={16} color={Palette.forest} />
+                <Text style={styles.reserveText}>Reserve now</Text>
+              </TouchableOpacity>
+            </>
           ) : (
-            <View style={styles.fullNote}>
-              <Ionicons name="battery-full" size={19} color={Palette.forest} />
-              <Text style={styles.fullText}>Charges until your battery is full, then stops by itself. You can stop it any time.</Text>
-            </View>
+            <>
+              {/* reservation view */}
+              <View style={styles.head}>
+                <TouchableOpacity onPress={() => setView('start')} hitSlop={10} style={styles.backBtn} accessibilityLabel="Back">
+                  <Ionicons name="chevron-back" size={20} color={Palette.ink} />
+                </TouchableOpacity>
+                <Text style={[styles.title, { flex: 1 }]}>Reserve this connector</Text>
+                <CloseButton onPress={onClose} />
+              </View>
+
+              <View style={styles.resCard}>
+                <View style={styles.iconBox}>
+                  <ConnectorIcon type={connector.type} size={30} original />
+                </View>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={styles.resName} numberOfLines={1}>
+                    {label}
+                  </Text>
+                  <Text style={styles.sub} numberOfLines={1}>
+                    {station.name} · {charger.serial} · Connector {connector.number}
+                  </Text>
+                </View>
+              </View>
+
+              <Text style={styles.section}>Hold it for</Text>
+              <MinuteChips value={hold} onChange={setHold} />
+
+              <View style={styles.holdBox}>
+                <Ionicons name="time-outline" size={20} color={Palette.forest} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.holdMain}>Held for you until {clock(Date.now() + hold * 60000)}</Text>
+                  <Text style={styles.holdSub}>No one else can start on it until then.</Text>
+                </View>
+              </View>
+
+              <View style={styles.rules}>
+                <Rule icon="wallet-outline">₹{RESERVATION_FEE} booking fee, paid from your wallet</Rule>
+                <Rule icon="arrow-undo-outline">Cancel within {FREE_CANCEL_MINS} min for a full refund</Rule>
+              </View>
+
+              <TouchableOpacity style={styles.startBtn} activeOpacity={0.88} onPress={() => onReserve(hold)}>
+                <Ionicons name="calendar" size={16} color={Palette.white} />
+                <Text style={styles.startText}>Confirm reservation · {hold} min</Text>
+              </TouchableOpacity>
+            </>
           )}
-
-          {/* what it comes to */}
-          <View style={styles.estimate}>
-            <Estimate label={mode === 'time' ? 'Stops at' : 'Full in about'} value={mode === 'time' ? clock(now + mins * 60000) : duration(est.minutes)} />
-            <View style={styles.estLine} />
-            <Estimate label="Energy" value={`≈ ${est.kwh.toFixed(1)} kWh`} />
-            <View style={styles.estLine} />
-            <Estimate label="Cost" value={`≈ ₹${Math.round(est.costINR)}`} />
-          </View>
-
-          <TouchableOpacity
-            style={[styles.startBtn, !canStart && styles.startOff]}
-            activeOpacity={0.88}
-            disabled={!canStart}
-            onPress={() => onStart(mode === 'time' ? mins : null)}>
-            <Ionicons name="flash" size={17} color={Palette.white} />
-            <Text style={styles.startText}>{mode === 'time' ? `Start charging · ${mins} min` : 'Start charging · until full'}</Text>
-          </TouchableOpacity>
-          {!canStart ? <Text style={styles.warn}>You&apos;re already charging. Stop that charge first.</Text> : null}
-
-          {/* not there yet */}
-          <View style={styles.orRow}>
-            <View style={styles.orLine} />
-            <Text style={styles.orText}>Not at the charger yet?</Text>
-            <View style={styles.orLine} />
-          </View>
-          <TouchableOpacity style={styles.reserveBtn} activeOpacity={0.85} onPress={() => onReserve(hold)}>
-            <Ionicons name="calendar-outline" size={16} color={Palette.forest} />
-            <Text style={styles.reserveText}>Reserve for {hold} min</Text>
-          </TouchableOpacity>
-          <Text style={styles.reserveNote}>
-            We hold this connector for you until {clock(now + hold * 60000)}. Cancel within {FREE_CANCEL_MINS} min for a full refund.
-          </Text>
           {error ? <Text style={styles.error}>{error}</Text> : null}
         </View>
       </View>
@@ -146,13 +177,32 @@ export default function StartSheet({
   );
 }
 
-function Estimate({ label, value }: { label: string; value: string }) {
+function MinuteChips({ value, onChange }: { value: number; onChange: (m: number) => void }) {
   return (
-    <View style={styles.est}>
-      <Text style={styles.estValue} numberOfLines={1} adjustsFontSizeToFit>
-        {value}
-      </Text>
-      <Text style={styles.estLabel}>{label}</Text>
+    <View style={styles.chips}>
+      {TIME_OPTIONS.map((m) => (
+        <TouchableOpacity key={m} onPress={() => onChange(m)} activeOpacity={0.85} style={[styles.chip, value === m && styles.chipOn]}>
+          <Text style={[styles.chipNum, value === m && styles.chipTextOn]}>{m}</Text>
+          <Text style={[styles.chipUnit, value === m && styles.chipTextOn]}>min</Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+}
+
+function CloseButton({ onPress }: { onPress: () => void }) {
+  return (
+    <TouchableOpacity onPress={onPress} hitSlop={10} accessibilityLabel="Close">
+      <Ionicons name="close" size={24} color={Palette.mist} />
+    </TouchableOpacity>
+  );
+}
+
+function Rule({ icon, children }: { icon: keyof typeof Ionicons.glyphMap; children: ReactNode }) {
+  return (
+    <View style={styles.rule}>
+      <Ionicons name={icon} size={15} color={Palette.mist} />
+      <Text style={styles.ruleText}>{children}</Text>
     </View>
   );
 }
@@ -183,11 +233,6 @@ const styles = scaledSheet({
   fullNote: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: Palette.voltSofter, borderRadius: 12, borderWidth: 1, borderColor: Palette.brandTint2, paddingHorizontal: Spacing.md, paddingVertical: 8, minHeight: 42 },
   fullText: { flex: 1, fontFamily: Font.medium, fontSize: 12, lineHeight: 16, color: Palette.inkSoft },
 
-  estimate: { flexDirection: 'row', alignItems: 'center', backgroundColor: Palette.surface, borderRadius: 12, paddingVertical: 8 },
-  est: { flex: 1, alignItems: 'center', paddingHorizontal: 4 },
-  estValue: { fontFamily: Font.displaySemi, fontSize: 13, color: Palette.ink },
-  estLabel: { fontFamily: Font.medium, fontSize: 10, color: Palette.mist, marginTop: 1 },
-  estLine: { width: 1, alignSelf: 'stretch', backgroundColor: Palette.line },
 
   startBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, height: 44, borderRadius: Radius.pill, backgroundColor: Palette.forest },
   startOff: { opacity: 0.45 },
@@ -198,6 +243,15 @@ const styles = scaledSheet({
   orText: { fontFamily: Font.medium, fontSize: 11, color: Palette.mist },
   reserveBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, height: 40, borderRadius: Radius.pill, borderWidth: 1.5, borderColor: Palette.forest, backgroundColor: Palette.surface },
   reserveText: { fontFamily: Font.bold, fontSize: 14, color: Palette.forest },
-  reserveNote: { fontFamily: Font.regular, fontSize: 11, lineHeight: 15, color: Palette.mist, textAlign: 'center', marginTop: -4 },
+  backBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: Palette.surface, alignItems: 'center', justifyContent: 'center' },
+  resCard: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: Palette.surface, borderRadius: 14, padding: 10 },
+  resName: { fontFamily: Font.semibold, fontSize: 15, color: Palette.ink },
+  section: { fontFamily: Font.semibold, fontSize: 13, color: Palette.mist, marginTop: 2 },
+  holdBox: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: Palette.voltSofter, borderRadius: 14, borderWidth: 1, borderColor: Palette.brandTint2, padding: Spacing.md },
+  holdMain: { fontFamily: Font.bold, fontSize: 14, color: Palette.forest },
+  holdSub: { fontFamily: Font.regular, fontSize: 12, color: Palette.mist, marginTop: 1 },
+  rules: { gap: 6, paddingHorizontal: 2 },
+  rule: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  ruleText: { flex: 1, fontFamily: Font.regular, fontSize: 12, color: Palette.inkSoft },
   error: { fontFamily: Font.medium, fontSize: 12, color: Palette.red, textAlign: 'center' },
 });

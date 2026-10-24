@@ -93,6 +93,7 @@ function LiveView({ session }: { session: LiveSession }) {
   const r = sessionReadout(session, now);
   const vehicle = useAppStore((st) => st.vehicles[0]);
   const typeLabel = CONNECTORS[connector.type].label;
+  const showSoc = r.dc && r.soc != null;
 
   const askStop = () => {
     setConfirming(true);
@@ -113,44 +114,36 @@ function LiveView({ session }: { session: LiveSession }) {
             {r.full ? <Ionicons name="checkmark-circle" size={14} color={Palette.forest} /> : <LiveDot />}
             <Text style={styles.statusText}>{r.doneBy === 'time' ? "Time's up" : r.full ? 'Charge complete' : 'Charging'}</Text>
           </View>
-          <View style={[styles.modePill, r.dc && styles.modePillDc]}>
-            <Ionicons name="flash" size={12} color={r.dc ? Palette.white : Palette.forest} />
-            <Text style={[styles.modeText, r.dc && { color: Palette.white }]}>{r.dc ? `DC fast · ${typeLabel}` : `AC · ${typeLabel}`}</Text>
+          <View style={styles.modePill}>
+            <Ionicons name="flash" size={12} color={Palette.white} />
+            <Text style={styles.modeText}>{r.dc ? `DC fast · ${typeLabel}` : `AC · ${typeLabel}`}</Text>
           </View>
         </View>
 
         {/* same picture for AC and DC: the car plugged into the charger */}
         <ConnectedVisual photo={vehicle?.photo ?? vehiclePhoto(vehicle?.model)} flowing={!r.full} />
 
-        {r.dc && r.soc != null ? (
-          // DC chargers read the battery, so lead with state of charge
-          <View style={styles.readout}>
-            <Text style={styles.big}>
-              {Math.floor(r.soc)}
-              <Text style={styles.bigUnit}>%</Text>
-            </Text>
-            <View style={styles.battery}>
-              <View style={styles.batteryTrack}>
-                <LinearGradient colors={Palette.gradVolt} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[styles.batteryFill, { width: `${Math.max(4, r.soc)}%` }]} />
-              </View>
-              <View style={styles.batteryCap} />
+        {/* two big numbers: battery % on DC (energy added on AC, which can't read the battery) and power */}
+        <View style={styles.metrics}>
+          {showSoc ? (
+            <Metric icon="battery-charging" value={String(Math.floor(r.soc ?? 0))} unit="%" a11y="Battery" />
+          ) : (
+            <Metric icon="battery-charging" value={r.energyKwh.toFixed(2)} unit="kWh" a11y="Energy added" />
+          )}
+          {r.full ? (
+            <Metric icon="checkmark-circle" value={r.doneBy === 'full' ? 'Full' : 'Done'} a11y="Charge finished" />
+          ) : (
+            <Metric icon="flash" value={String(r.powerKw)} unit="kW" a11y="Charging power" />
+          )}
+        </View>
+        {showSoc ? (
+          <View style={styles.battery}>
+            <View style={styles.batteryTrack}>
+              <LinearGradient colors={Palette.gradVolt} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[styles.batteryFill, { width: `${Math.max(4, r.soc ?? 0)}%` }]} />
             </View>
-            <Text style={styles.kw}>
-              <Ionicons name={r.full ? 'checkmark-circle' : 'flash'} size={13} color={Palette.forest} /> {r.doneBy === 'full' ? 'Full' : r.full ? 'Stopped' : `${r.powerKw} kW`}
-            </Text>
+            <View style={styles.batteryCap} />
           </View>
-        ) : (
-          <View style={styles.readout}>
-            {r.full ? (
-              <Ionicons name="checkmark-circle" size={50} color={Palette.forest} />
-            ) : (
-              <Text style={styles.big}>
-                {r.powerKw}
-                <Text style={styles.bigUnit}> kW</Text>
-              </Text>
-            )}
-          </View>
-        )}
+        ) : null}
 
         {!r.full ? (
           <View style={styles.limitPill}>
@@ -173,8 +166,12 @@ function LiveView({ session }: { session: LiveSession }) {
 
       {/* energy · time · cost — icons only */}
       <View style={styles.stats}>
-        <Stat icon="battery-charging" value={r.energyKwh.toFixed(2)} unit="kWh" a11y="Energy added" />
-        <View style={styles.statLine} />
+        {showSoc ? (
+          <>
+            <Stat icon="battery-charging" value={r.energyKwh.toFixed(2)} unit="kWh" a11y="Energy added" />
+            <View style={styles.statLine} />
+          </>
+        ) : null}
         <Stat icon="time-outline" value={formatDuration(r.seconds)} a11y="Charging time" />
         <View style={styles.statLine} />
         <Stat icon="wallet-outline" value={formatINR(r.costINR)} a11y="Cost so far" />
@@ -240,6 +237,21 @@ function FlowDot({ flow, offset }: { flow: SharedValue<number>; offset: number }
   return <Animated.View style={[styles.flowDot, style]} />;
 }
 
+/** One big number in the hero, icon first, no label. */
+function Metric({ icon, value, unit, a11y }: { icon: keyof typeof Ionicons.glyphMap; value: string; unit?: string; a11y: string }) {
+  return (
+    <View style={styles.metric} accessible accessibilityLabel={`${a11y}: ${value}${unit ? ' ' + unit : ''}`}>
+      <View style={styles.metricIcon}>
+        <Ionicons name={icon} size={18} color={Palette.forest} />
+      </View>
+      <Text style={styles.metricValue} numberOfLines={1} adjustsFontSizeToFit>
+        {value}
+        {unit ? <Text style={styles.metricUnit}> {unit}</Text> : null}
+      </Text>
+    </View>
+  );
+}
+
 function Stat({ icon, value, unit, a11y }: { icon: keyof typeof Ionicons.glyphMap; value: string; unit?: string; a11y: string }) {
   return (
     <View style={styles.stat} accessible accessibilityLabel={`${a11y}: ${value}${unit ? ' ' + unit : ''}`}>
@@ -279,9 +291,8 @@ const styles = scaledSheet({
   statusPill: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: Palette.surface, borderRadius: Radius.pill, paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: Palette.brandTint2 },
   liveDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: Palette.volt },
   statusText: { fontFamily: Font.semibold, fontSize: 12, color: Palette.forest },
-  modePill: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: Palette.voltSoft, borderRadius: Radius.pill, paddingHorizontal: 10, paddingVertical: 5 },
-  modePillDc: { backgroundColor: Palette.volt },
-  modeText: { fontFamily: Font.bold, fontSize: 12, color: Palette.forest },
+  modePill: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: Palette.volt, borderRadius: Radius.pill, paddingHorizontal: 10, paddingVertical: 5 },
+  modeText: { fontFamily: Font.bold, fontSize: 12, color: Palette.white },
 
   connected: { alignItems: 'center', marginTop: Spacing.xl, alignSelf: 'stretch' },
   connectedRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
@@ -291,14 +302,15 @@ const styles = scaledSheet({
   cableLine: { height: 3, borderRadius: 2, backgroundColor: Palette.brandTint2 },
   flowDot: { position: 'absolute', left: 0, width: 8, height: 8, borderRadius: 4, backgroundColor: Palette.volt },
   chargerBox: { width: 56, height: 64, borderRadius: 16, backgroundColor: Palette.forest, alignItems: 'center', justifyContent: 'center', ...Shadow.volt },
-  readout: { alignItems: 'center', marginTop: Spacing.lg, alignSelf: 'stretch' },
-  big: { fontFamily: Font.display, fontSize: 44, lineHeight: 50, color: Palette.ink },
-  bigUnit: { fontFamily: Font.displaySemi, fontSize: 20, color: Palette.mist },
-  battery: { flexDirection: 'row', alignItems: 'center', width: '72%', marginTop: Spacing.sm },
+  metrics: { flexDirection: 'row', gap: Spacing.sm, alignSelf: 'stretch', marginTop: Spacing.lg },
+  metric: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: Spacing.sm, backgroundColor: Palette.surface, borderRadius: 18, paddingVertical: Spacing.md, paddingHorizontal: Spacing.sm, borderWidth: 1, borderColor: Palette.brandTint2 },
+  metricIcon: { width: 34, height: 34, borderRadius: 17, backgroundColor: Palette.voltSoft, alignItems: 'center', justifyContent: 'center' },
+  metricValue: { fontFamily: Font.display, fontSize: 30, lineHeight: 36, color: Palette.ink, flexShrink: 1 },
+  metricUnit: { fontFamily: Font.displaySemi, fontSize: 15, color: Palette.mist },
+  battery: { flexDirection: 'row', alignItems: 'center', alignSelf: 'stretch', marginTop: Spacing.md },
   batteryTrack: { flex: 1, height: 16, borderRadius: 6, padding: 2, backgroundColor: Palette.surface, borderWidth: 1.5, borderColor: Palette.brandTint2 },
   batteryFill: { height: '100%', borderRadius: 4 },
   batteryCap: { width: 4, height: 8, borderTopRightRadius: 2, borderBottomRightRadius: 2, backgroundColor: Palette.brandTint2, marginLeft: 2 },
-  kw: { fontFamily: Font.semibold, fontSize: 14, color: Palette.forest, marginTop: Spacing.sm },
 
   limitPill: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: Spacing.md, backgroundColor: Palette.surface, borderRadius: Radius.pill, paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: Palette.brandTint2 },
   limitText: { fontFamily: Font.semibold, fontSize: 13, color: Palette.forest },
