@@ -3,11 +3,10 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Animated as RNAnimated, ScrollView, Text, TouchableOpacity, View } from 'react-native';
+import { Animated as RNAnimated, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Animated, { Easing, cancelAnimation, useAnimatedStyle, useSharedValue, withRepeat, withTiming, type SharedValue } from 'react-native-reanimated';
 
 import AppHeader from '@/components/app-header';
-import ChargeRing from '@/components/charge-ring';
 import VoltButton from '@/components/volt-button';
 import { s as scale, scaledSheet } from '@/constants/responsive';
 import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
@@ -110,8 +109,8 @@ function LiveView({ session }: { session: LiveSession }) {
       <LinearGradient colors={Palette.gradHero} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={styles.hero}>
         <View style={styles.heroTop}>
           <View style={styles.statusPill}>
-            <LiveDot />
-            <Text style={styles.statusText}>Charging</Text>
+            {r.full ? <Ionicons name="checkmark-circle" size={14} color={Palette.forest} /> : <LiveDot />}
+            <Text style={styles.statusText}>{r.full ? 'Charge complete' : 'Charging'}</Text>
           </View>
           <View style={[styles.modePill, r.dc && styles.modePillDc]}>
             <Ionicons name="flash" size={12} color={r.dc ? Palette.white : Palette.forest} />
@@ -119,21 +118,37 @@ function LiveView({ session }: { session: LiveSession }) {
           </View>
         </View>
 
-        {r.dc ? (
-          // DC chargers read the battery, so show state of charge
-          <View style={styles.ringWrap}>
-            <ChargeRing size={scale(196)} progress={(r.soc ?? 0) / 100} strokeWidth={scale(13)} trackColor={Palette.voltSoft}>
-              <Text style={styles.socLabel}>Battery</Text>
-              <Text style={styles.soc}>
-                {Math.floor(r.soc ?? 0)}
-                <Text style={styles.socPct}>%</Text>
-              </Text>
-              <Text style={styles.socSub}>{r.powerKw} kW</Text>
-            </ChargeRing>
+        {/* same picture for AC and DC: the car plugged into the charger */}
+        <ConnectedVisual photo={vehicle?.photo ?? vehiclePhoto(vehicle?.model)} flowing={!r.full} />
+
+        {r.dc && r.soc != null ? (
+          // DC chargers read the battery, so lead with state of charge
+          <View style={styles.readout}>
+            <Text style={styles.big}>
+              {Math.floor(r.soc)}
+              <Text style={styles.bigUnit}>%</Text>
+            </Text>
+            <View style={styles.battery}>
+              <View style={styles.batteryTrack}>
+                <LinearGradient colors={Palette.gradVolt} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[styles.batteryFill, { width: `${Math.max(4, r.soc)}%` }]} />
+              </View>
+              <View style={styles.batteryCap} />
+            </View>
+            <Text style={styles.kw}>
+              <Ionicons name={r.full ? 'checkmark-circle' : 'flash'} size={13} color={Palette.forest} /> {r.full ? 'Full' : `${r.powerKw} kW`}
+            </Text>
           </View>
         ) : (
-          // AC chargers can't read the battery: show the car plugged into the charger instead
-          <ConnectedVisual photo={vehicle?.photo ?? vehiclePhoto(vehicle?.model)} powerKw={r.powerKw} />
+          <View style={styles.readout}>
+            {r.full ? (
+              <Ionicons name="checkmark-circle" size={50} color={Palette.forest} />
+            ) : (
+              <Text style={styles.big}>
+                {r.powerKw}
+                <Text style={styles.bigUnit}> kW</Text>
+              </Text>
+            )}
+          </View>
         )}
 
         <View style={styles.stationRow}>
@@ -148,19 +163,14 @@ function LiveView({ session }: { session: LiveSession }) {
         </View>
       </LinearGradient>
 
-      <View style={styles.grid}>
-        <Tile icon="battery-charging" label="Energy added" value={r.energyKwh.toFixed(2)} unit="kWh" live />
-        <Tile icon="time" label="Charging for" value={formatDuration(r.seconds)} />
-        <Tile icon="cash-outline" label={`Cost so far · ₹${station.pricePerKwh}/kWh`} value={formatINR(r.costINR)} />
-        <Tile icon="flash" label="Power now" value={`${r.powerKw}`} unit="kW" />
+      {/* energy · time · cost — icons only */}
+      <View style={styles.stats}>
+        <Stat icon="battery-charging" value={r.energyKwh.toFixed(2)} unit="kWh" a11y="Energy added" />
+        <View style={styles.statLine} />
+        <Stat icon="time-outline" value={formatDuration(r.seconds)} a11y="Charging time" />
+        <View style={styles.statLine} />
+        <Stat icon="wallet-outline" value={formatINR(r.costINR)} a11y="Cost so far" />
       </View>
-
-      {!r.dc ? (
-        <View style={styles.note}>
-          <Ionicons name="information-circle-outline" size={17} color={Palette.mist} />
-          <Text style={styles.noteText}>AC chargers can&apos;t read your battery level. You&apos;ll see it on DC fast chargers.</Text>
-        </View>
-      ) : null}
 
       {confirming ? (
         <View style={styles.confirm}>
@@ -181,7 +191,7 @@ function LiveView({ session }: { session: LiveSession }) {
 }
 
 /** Car ← cable with flowing energy ← charger. */
-function ConnectedVisual({ photo, powerKw }: { photo: unknown; powerKw: number }) {
+function ConnectedVisual({ photo, flowing }: { photo: unknown; flowing: boolean }) {
   const flow = useSharedValue(0);
   useEffect(() => {
     flow.value = withRepeat(withTiming(1, { duration: 1300, easing: Easing.linear }), -1, false);
@@ -201,19 +211,12 @@ function ConnectedVisual({ photo, powerKw }: { photo: unknown; powerKw: number }
         </View>
         <View style={styles.cable}>
           <View style={styles.cableLine} />
-          {[0, 1, 2, 3].map((i) => (
-            <FlowDot key={i} flow={flow} offset={i / 4} />
-          ))}
+          {flowing ? [0, 1, 2, 3].map((i) => <FlowDot key={i} flow={flow} offset={i / 4} />) : null}
         </View>
         <View style={styles.chargerBox}>
           <MaterialCommunityIcons name="ev-station" size={34} color={Palette.white} />
         </View>
       </View>
-      <Text style={styles.power}>
-        {powerKw}
-        <Text style={styles.powerUnit}> kW</Text>
-      </Text>
-      <Text style={styles.powerLabel}>Charging power</Text>
     </View>
   );
 }
@@ -229,38 +232,15 @@ function FlowDot({ flow, offset }: { flow: SharedValue<number>; offset: number }
   return <Animated.View style={[styles.flowDot, style]} />;
 }
 
-function Tile({
-  icon,
-  label,
-  value,
-  unit,
-  live,
-}: {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  value: string;
-  unit?: string;
-  live?: boolean;
-}) {
+function Stat({ icon, value, unit, a11y }: { icon: keyof typeof Ionicons.glyphMap; value: string; unit?: string; a11y: string }) {
   return (
-    <View style={styles.tile}>
-      <View style={styles.tileTop}>
-        <View style={styles.tileIcon}>
-          <Ionicons name={icon} size={15} color={Palette.forest} />
-        </View>
-        {live ? (
-          <View style={styles.liveTag}>
-            <LiveDot />
-            <Text style={styles.liveText}>Live</Text>
-          </View>
-        ) : null}
+    <View style={styles.stat} accessible accessibilityLabel={`${a11y}: ${value}${unit ? ' ' + unit : ''}`}>
+      <View style={styles.statIcon}>
+        <Ionicons name={icon} size={17} color={Palette.forest} />
       </View>
-      <Text style={styles.tileValue} numberOfLines={1}>
+      <Text style={styles.statValue} numberOfLines={1} adjustsFontSizeToFit>
         {value}
-        {unit ? <Text style={styles.tileUnit}> {unit}</Text> : null}
-      </Text>
-      <Text style={styles.tileLabel} numberOfLines={1}>
-        {label}
+        {unit ? <Text style={styles.statUnit}> {unit}</Text> : null}
       </Text>
     </View>
   );
@@ -268,7 +248,7 @@ function Tile({
 
 const styles = scaledSheet({
   container: { flex: 1, backgroundColor: Palette.canvas },
-  scroll: { paddingHorizontal: Spacing.lg, paddingBottom: 130, gap: Spacing.md },
+  scroll: { paddingHorizontal: Spacing.lg, paddingBottom: Spacing.xl, gap: Spacing.md },
 
   // demo switch
   demo: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingHorizontal: Spacing.lg, marginBottom: Spacing.md },
@@ -280,7 +260,7 @@ const styles = scaledSheet({
   demoTextOn: { color: Palette.white },
 
   // empty
-  emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: Spacing.xxl, paddingBottom: 110 },
+  emptyWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: Spacing.xxl, paddingBottom: Spacing.xl },
   emptyIcon: { width: 84, height: 84, borderRadius: 42, backgroundColor: Palette.voltSoft, alignItems: 'center', justifyContent: 'center', marginBottom: Spacing.lg },
   emptyTitle: { fontFamily: Font.display, fontSize: 22, color: Palette.ink, textAlign: 'center' },
   emptyText: { fontFamily: Font.regular, fontSize: 15, lineHeight: 22, color: Palette.mist, textAlign: 'center', marginTop: Spacing.sm },
@@ -295,13 +275,7 @@ const styles = scaledSheet({
   modePillDc: { backgroundColor: Palette.volt },
   modeText: { fontFamily: Font.bold, fontSize: 12, color: Palette.forest },
 
-  ringWrap: { marginTop: Spacing.md },
-  socLabel: { fontFamily: Font.medium, fontSize: 12, color: Palette.mist },
-  soc: { fontFamily: Font.display, fontSize: 46, lineHeight: 52, color: Palette.ink },
-  socPct: { fontFamily: Font.displaySemi, fontSize: 20, color: Palette.mist },
-  socSub: { fontFamily: Font.semibold, fontSize: 13, color: Palette.forest },
-
-  connected: { alignItems: 'center', marginTop: Spacing.lg, alignSelf: 'stretch' },
+  connected: { alignItems: 'center', marginTop: Spacing.xl, alignSelf: 'stretch' },
   connectedRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
   carBox: { width: 128, height: 76, alignItems: 'center', justifyContent: 'center' },
   carImg: { width: 128, height: 76 },
@@ -309,26 +283,25 @@ const styles = scaledSheet({
   cableLine: { height: 3, borderRadius: 2, backgroundColor: Palette.brandTint2 },
   flowDot: { position: 'absolute', left: 0, width: 8, height: 8, borderRadius: 4, backgroundColor: Palette.volt },
   chargerBox: { width: 56, height: 64, borderRadius: 16, backgroundColor: Palette.forest, alignItems: 'center', justifyContent: 'center', ...Shadow.volt },
-  power: { fontFamily: Font.display, fontSize: 38, color: Palette.ink, marginTop: Spacing.md },
-  powerUnit: { fontFamily: Font.displaySemi, fontSize: 18, color: Palette.mist },
-  powerLabel: { fontFamily: Font.medium, fontSize: 13, color: Palette.mist },
+  readout: { alignItems: 'center', marginTop: Spacing.lg, alignSelf: 'stretch' },
+  big: { fontFamily: Font.display, fontSize: 44, lineHeight: 50, color: Palette.ink },
+  bigUnit: { fontFamily: Font.displaySemi, fontSize: 20, color: Palette.mist },
+  battery: { flexDirection: 'row', alignItems: 'center', width: '72%', marginTop: Spacing.sm },
+  batteryTrack: { flex: 1, height: 16, borderRadius: 6, padding: 2, backgroundColor: Palette.surface, borderWidth: 1.5, borderColor: Palette.brandTint2 },
+  batteryFill: { height: '100%', borderRadius: 4 },
+  batteryCap: { width: 4, height: 8, borderTopRightRadius: 2, borderBottomRightRadius: 2, backgroundColor: Palette.brandTint2, marginLeft: 2 },
+  kw: { fontFamily: Font.semibold, fontSize: 14, color: Palette.forest, marginTop: Spacing.sm },
 
   stationRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: Spacing.lg, alignSelf: 'stretch', justifyContent: 'center' },
   station: { fontFamily: Font.semibold, fontSize: 13, color: Palette.ink, flexShrink: 1 },
   connector: { fontFamily: Font.regular, color: Palette.mist },
 
-  grid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
-  tile: { flexBasis: '45%', flexGrow: 1, backgroundColor: Palette.surface, borderRadius: Radius.card, padding: Spacing.md, gap: 4, ...Shadow.soft },
-  tileTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  tileIcon: { width: 28, height: 28, borderRadius: 14, backgroundColor: Palette.voltSoft, alignItems: 'center', justifyContent: 'center' },
-  liveTag: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  liveText: { fontFamily: Font.semibold, fontSize: 11, color: Palette.forest },
-  tileValue: { fontFamily: Font.display, fontSize: 19, color: Palette.ink, marginTop: 2 },
-  tileUnit: { fontFamily: Font.medium, fontSize: 13, color: Palette.mist },
-  tileLabel: { fontFamily: Font.medium, fontSize: 12, color: Palette.mist },
-
-  note: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, paddingHorizontal: Spacing.xs },
-  noteText: { flex: 1, fontFamily: Font.regular, fontSize: 12, lineHeight: 17, color: Palette.mist },
+  stats: { flexDirection: 'row', alignItems: 'center', backgroundColor: Palette.surface, borderRadius: Radius.card, paddingVertical: Spacing.md, ...Shadow.soft },
+  stat: { flex: 1, alignItems: 'center', gap: 6, paddingHorizontal: 4 },
+  statIcon: { width: 32, height: 32, borderRadius: 16, backgroundColor: Palette.voltSoft, alignItems: 'center', justifyContent: 'center' },
+  statValue: { fontFamily: Font.display, fontSize: 17, color: Palette.ink },
+  statUnit: { fontFamily: Font.medium, fontSize: 12, color: Palette.mist },
+  statLine: { width: StyleSheet.hairlineWidth, alignSelf: 'stretch', marginVertical: 6, backgroundColor: Palette.line },
 
   confirm: { backgroundColor: Palette.surface, borderRadius: Radius.card, padding: Spacing.lg, gap: Spacing.sm, borderWidth: 1, borderColor: Palette.redSoft, ...Shadow.soft },
   confirmTitle: { fontFamily: Font.displaySemi, fontSize: 17, color: Palette.ink },

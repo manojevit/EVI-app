@@ -95,8 +95,8 @@ export default function HomeScreen() {
   };
 
   const topPad = insets.top + Spacing.sm;
-  const tabBarH = Math.max(insets.bottom, Spacing.md) + s(64);
-  const cardsBottom = tabBarH + s(10);
+  // the tab bar is docked below this screen, so the cards sit just above the bottom edge
+  const cardsBottom = s(12);
   const cardH = s(CARD_H);
   const freePlugs = matching.reduce((n, st) => n + freeConnectorCount(st), 0);
 
@@ -107,7 +107,7 @@ export default function HomeScreen() {
           data={listed}
           keyExtractor={(st) => st.id}
           renderItem={({ item }) => <StationCard station={item} />}
-          contentContainerStyle={{ paddingTop: topPad + s(124), paddingHorizontal: s(GUTTER), paddingBottom: s(150), gap: s(Spacing.md) }}
+          contentContainerStyle={{ paddingTop: topPad + s(124), paddingHorizontal: s(GUTTER), paddingBottom: s(Spacing.xl), gap: s(Spacing.md) }}
           showsVerticalScrollIndicator={false}
           ListHeaderComponent={
             <View style={styles.listHead}>

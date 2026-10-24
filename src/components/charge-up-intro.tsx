@@ -19,7 +19,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import Svg, { Circle, Defs, LinearGradient as SvgGradient, Path, RadialGradient, Stop } from 'react-native-svg';
 
-import { BrandLogoFull, BrandLogoImage } from '@/components/brand-logo';
+import BrandLogo, { BrandLogoFull } from '@/components/brand-logo';
 import { Font, Palette } from '@/constants/theme';
 
 /**
@@ -30,8 +30,8 @@ import { Font, Palette } from '@/constants/theme';
  *    an odometer counter rolls 0 → 100.
  * 3. Wind-up: the ring compresses (anticipation), then a bolt strikes — sparks,
  *    double shockwave and a short screen shake (no vibration).
- * 4. Brand-green floods out from the bolt, the bolt turns white and hands over
- *    to the white EVIT logo (same look as the app icon); the tagline staggers in.
+ * 4. A light wash floods out from the bolt, the bolt deepens to the logo's green and
+ *    hands over to the official green EVIT logo (same as the app icon); the tagline staggers in.
  * 5. The green contracts back into the centre, revealing onboarding.
  */
 
@@ -539,24 +539,24 @@ export default function ChargeUpIntro({ onDone }: { onDone: () => void }) {
           <Spark key={i} s={s} burst={burst} />
         ))}
 
-        {/* brand-green flood, with a lighter wave on its edge */}
+        {/* light wash, with a soft green wave on its edge */}
         <Animated.View
           pointerEvents="none"
-          style={[styles.abs, { width: floodD, height: floodD, borderRadius: floodD / 2, backgroundColor: Palette.gradEnergy[0] }, floodLeadStyle]}
+          style={[styles.abs, { width: floodD, height: floodD, borderRadius: floodD / 2, backgroundColor: Palette.voltSoft }, floodLeadStyle]}
         />
         <Animated.View
           pointerEvents="none"
           renderToHardwareTextureAndroid
           shouldRasterizeIOS
           style={[styles.abs, { width: floodD, height: floodD, borderRadius: floodD / 2, overflow: 'hidden' }, floodStyle]}>
-          <LinearGradient colors={['#2CAF60', '#17713A']} start={{ x: 0.2, y: 0 }} end={{ x: 0.8, y: 1 }} style={StyleSheet.absoluteFill} />
+          <LinearGradient colors={['#FFFFFF', Palette.canvas]} start={{ x: 0.2, y: 0 }} end={{ x: 0.8, y: 1 }} style={StyleSheet.absoluteFill} />
         </Animated.View>
 
-        {/* light sheen across the green (kept outside the flood so the flood stays a cached, static layer) */}
+        {/* faint green sheen across the wash (kept outside the flood so the flood stays a cached, static layer) */}
         <View style={[StyleSheet.absoluteFill, styles.center, styles.clip]} pointerEvents="none">
           <Animated.View style={[styles.sheen, { height: height * 1.6 }, sheenStyle]}>
             <LinearGradient
-              colors={['rgba(255,255,255,0)', 'rgba(255,255,255,0.16)', 'rgba(255,255,255,0)']}
+              colors={['rgba(28,138,71,0)', 'rgba(28,138,71,0.07)', 'rgba(28,138,71,0)']}
               start={{ x: 0, y: 0.5 }}
               end={{ x: 1, y: 0.5 }}
               style={StyleSheet.absoluteFill}
@@ -564,7 +564,7 @@ export default function ChargeUpIntro({ onDone }: { onDone: () => void }) {
           </Animated.View>
         </View>
 
-        {/* bolt: strikes green, turns white as the flood passes */}
+        {/* bolt: strikes bright green, deepens to the logo's green as the wash passes */}
         <Animated.View style={[styles.abs, { width: BOLT_W, height: BOLT_H }, boltStyle]} pointerEvents="none">
           {/* RGB-split glitch copies */}
           <Animated.View style={[StyleSheet.absoluteFill, ghostLime]}>
@@ -582,7 +582,7 @@ export default function ChargeUpIntro({ onDone }: { onDone: () => void }) {
           </Svg>
           <Animated.View style={[StyleSheet.absoluteFill, boltWhiteStyle]}>
             <Svg width={BOLT_W} height={BOLT_H} viewBox="0 0 96 140">
-              <Path d={BOLT_PATH} fill={Palette.white} />
+              <Path d={BOLT_PATH} fill={Palette.forest} />
             </Svg>
           </Animated.View>
         </Animated.View>
@@ -590,7 +590,7 @@ export default function ChargeUpIntro({ onDone }: { onDone: () => void }) {
         {/* powered logo + tagline */}
         <Animated.View style={[styles.abs, styles.final, finalStyle]} pointerEvents="none">
           <Animated.View style={logoBStyle}>
-            <BrandLogoImage height={124} />
+            <BrandLogo height={124} />
           </Animated.View>
           <View style={styles.tagline}>
             {TAGLINE.map((w, i) => (
@@ -642,7 +642,7 @@ const styles = StyleSheet.create({
 
   final: { alignItems: 'center' },
   tagline: { flexDirection: 'row', gap: 5, marginTop: 20 },
-  taglineWord: { fontFamily: Font.medium, fontSize: 16, color: 'rgba(255,255,255,0.92)', letterSpacing: 0.2 },
+  taglineWord: { fontFamily: Font.medium, fontSize: 16, color: Palette.forest, letterSpacing: 0.2 },
 
   hint: { position: 'absolute', bottom: 48, alignSelf: 'center', fontFamily: Font.medium, fontSize: 13, color: Palette.mist },
 });

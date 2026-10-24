@@ -1,8 +1,9 @@
 /**
- * Tiny in-memory app state for the prototype, so actions actually change the UI:
+ * Tiny app state for the prototype, so actions actually change the UI:
  * start/stop a charging session, top up the wallet, raise tickets, save the profile.
- * Lives for the app session only (no backend yet).
+ * Saved on the phone (no backend yet), so it survives closing the app; logging out clears it.
  */
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useSyncExternalStore } from 'react';
 
 import type { ConnectorKey } from '@/data/connectors';
@@ -57,6 +58,10 @@ interface AppState {
   location: UserLocation;
   /** the user's own review per station (one each; submitting again replaces it) */
   myReviews: Record<string, Review>;
+  /** signed in with phone + OTP; the app then opens straight to the map */
+  signedIn: boolean;
+  /** has seen onboarding once (kept after logging out) */
+  onboarded: boolean;
 }
 
 export interface UserLocation {
@@ -65,9 +70,8 @@ export interface UserLocation {
   live: boolean;
 }
 
-let state: AppState = {
-  // demo: an AC session that has been running for ~19 minutes
-  session: { stationId: 'evi-test-1', chargerId: 'ch2', connectorId: 'c1', startedAt: Date.now() - (19 * 60 + 23) * 1000, startSoc: null },
+const fresh = (): AppState => ({
+  session: null,
   walletBalance: ACCOUNT.walletBalance,
   txns: WALLET_TXNS,
   tickets: TICKETS,
@@ -79,13 +83,68 @@ let state: AppState = {
   planId: null,
   location: { ...USER_LOCATION, live: false },
   myReviews: {},
-};
+  signedIn: false,
+  onboarded: false,
+});
+let state: AppState = fresh();
 
 const listeners = new Set<() => void>();
 const set = (patch: Partial<AppState>) => {
   state = { ...state, ...patch };
   listeners.forEach((l) => l());
+  save();
 };
+
+// ---- saved on the phone ----
+const STORAGE_KEY = 'evit-app-state-v1';
+// location comes fresh from GPS each launch, so it isn't saved
+const SAVED: (keyof AppState)[] = [
+  'session', 'walletBalance', 'txns', 'tickets', 'history', 'profile', 'vehicles',
+  'favourites', 'filters', 'planId', 'myReviews', 'signedIn', 'onboarded',
+];
+let hydrated = false;
+let saveTimer: ReturnType<typeof setTimeout> | null = null;
+function save() {
+  if (!hydrated) return; // never overwrite what's saved with defaults before it's been read
+  if (saveTimer) clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    const out: Partial<AppState> = {};
+    for (const k of SAVED) (out as Record<string, unknown>)[k] = state[k];
+    AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(out)).catch(() => {});
+  }, 250);
+}
+
+/** Loads the saved state once at launch. Bad or missing data just leaves the defaults. */
+export const hydrate: Promise<void> = (async () => {
+  try {
+    const raw = await AsyncStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const saved = JSON.parse(raw) as Partial<AppState>;
+      const patch: Partial<AppState> = {};
+      for (const k of SAVED) if (saved[k] !== undefined) (patch as Record<string, unknown>)[k] = saved[k];
+      // drop a session that points at a charger the app no longer knows
+      if (patch.session && !findParts(patch.session)) patch.session = null;
+      state = { ...state, ...patch };
+    }
+  } catch {
+    // unreadable storage: start fresh
+  }
+  hydrated = true;
+  listeners.forEach((l) => l());
+})();
+
+export function signIn() {
+  set({ signedIn: true, onboarded: true });
+}
+export function finishOnboarding() {
+  set({ onboarded: true });
+}
+/** Logs out and clears this phone's data back to the demo defaults. */
+export function signOut() {
+  state = { ...fresh(), onboarded: true, location: state.location };
+  listeners.forEach((l) => l());
+  save();
+}
 const subscribe = (l: () => void) => {
   listeners.add(l);
   return () => listeners.delete(l);
@@ -100,23 +159,35 @@ export const getAppState = () => state;
 // ---- live session maths ----
 const BATTERY_KWH = 82; // demo pack size used to turn energy into battery % on DC
 
-export function sessionParts(s: LiveSession) {
-  const station = STATIONS.find((x) => x.id === s.stationId) as Station;
-  const charger = station.chargers.find((c) => c.id === s.chargerId) as Charger;
-  const connector = charger.connectors.find((c) => c.id === s.connectorId) as Connector;
-  return { station, charger, connector };
+function findParts(s: LiveSession) {
+  const station = STATIONS.find((x) => x.id === s.stationId);
+  const charger = station?.chargers.find((c) => c.id === s.chargerId);
+  const connector = charger?.connectors.find((c) => c.id === s.connectorId);
+  return station && charger && connector ? { station, charger, connector } : null;
 }
 
-/** Live numbers for a running session at time `now`. */
+export function sessionParts(s: LiveSession) {
+  return findParts(s) as { station: Station; charger: Charger; connector: Connector };
+}
+
+/**
+ * Live numbers for a running session at time `now`. Charging stops by itself when the
+ * battery is full, so a session left running for days doesn't keep adding energy and cost.
+ */
 export function sessionReadout(s: LiveSession, now = Date.now()) {
   const { station, charger } = sessionParts(s);
   const dc = charger.current === 'DC';
-  const powerKw = dc ? +(charger.powerKw * 0.75).toFixed(1) : +(Math.min(charger.powerKw, 7.4) * 0.46).toFixed(1);
-  const seconds = Math.max(0, Math.floor((now - s.startedAt) / 1000));
-  const energyKwh = (powerKw * seconds) / 3600;
+  const ratedKw = dc ? +(charger.powerKw * 0.75).toFixed(1) : +(Math.min(charger.powerKw, 7.4) * 0.46).toFixed(1);
+  // energy until full: DC knows the starting %; AC assumes the car arrived at about 40%
+  const roomKwh = BATTERY_KWH * (1 - (dc && s.startSoc != null ? s.startSoc : 40) / 100);
+  const fullAfter = Math.round((roomKwh / ratedKw) * 3600);
+  const elapsed = Math.max(0, Math.floor((now - s.startedAt) / 1000));
+  const full = elapsed >= fullAfter;
+  const seconds = Math.min(elapsed, fullAfter);
+  const energyKwh = (ratedKw * seconds) / 3600;
   const costINR = energyKwh * station.pricePerKwh;
   const soc = dc && s.startSoc != null ? Math.min(100, s.startSoc + (energyKwh / BATTERY_KWH) * 100) : null;
-  return { dc, powerKw, seconds, energyKwh, costINR, soc };
+  return { dc, powerKw: full ? 0 : ratedKw, seconds, energyKwh, costINR, soc, full };
 }
 
 export const formatDuration = (sec: number) => {
@@ -251,7 +322,7 @@ export function submitReview(stationId: string, r: { stars: number; text: string
     id: `me-${stationId}`,
     name: state.profile.name,
     stars: r.stars,
-    date: 'Just now',
+    date: new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }),
     text: r.text.trim(),
     tags: r.tags,
   };

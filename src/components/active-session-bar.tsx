@@ -11,9 +11,8 @@ import { useNow } from '@/hooks/use-now';
 
 /**
  * Floating "charging now" strip, shown only while a session is running.
- * Pass `aboveTabBar` on tabbed screens so it clears the floating tab bar.
  */
-export default function ActiveSessionBar({ aboveTabBar }: { aboveTabBar?: boolean }) {
+export default function ActiveSessionBar() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const session = useAppStore((st) => st.session);
@@ -22,7 +21,7 @@ export default function ActiveSessionBar({ aboveTabBar }: { aboveTabBar?: boolea
 
   const { station } = sessionParts(session);
   const r = sessionReadout(session, now);
-  const bottom = insets.bottom + (aboveTabBar ? 92 : Spacing.lg);
+  const bottom = insets.bottom + Spacing.lg;
 
   return (
     <TouchableOpacity activeOpacity={0.9} onPress={() => router.navigate('/sessions')} style={[styles.bar, { bottom }]}>
@@ -31,8 +30,8 @@ export default function ActiveSessionBar({ aboveTabBar }: { aboveTabBar?: boolea
       </View>
       <View style={{ flex: 1 }}>
         <View style={styles.liveRow}>
-          <View style={styles.liveDot} />
-          <Text style={styles.live}>Charging now</Text>
+          <View style={[styles.liveDot, r.full && { backgroundColor: Palette.forest }]} />
+          <Text style={styles.live}>{r.full ? 'Charge complete' : 'Charging now'}</Text>
         </View>
         <Text style={styles.name} numberOfLines={1}>
           {station.name}

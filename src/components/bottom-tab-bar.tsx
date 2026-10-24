@@ -1,9 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
+import { Font, Palette, Radius, Spacing } from '@/constants/theme';
 import { scaledSheet } from '@/constants/responsive';
 
 type TabRoute = { key: string; name: string };
@@ -22,70 +21,62 @@ const ICONS: Record<string, { on: keyof typeof Ionicons.glyphMap; off: keyof typ
 };
 const LABELS: Record<string, string> = { map: 'Map', sessions: 'Charging', account: 'Account' };
 
-/** Floating tab bar — active tab expands into a gradient pill with its label. */
+/**
+ * Full-width bar docked to the bottom. It sits in the layout (not floating), so screens
+ * end above it and nothing scrolls behind it. The active tab gets a green pill and bold label.
+ */
 export default function BottomTabBar({ state, emitter, navigateToTab }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
 
   return (
-    <View style={[styles.outer, { paddingBottom: Math.max(insets.bottom, Spacing.md) }]} pointerEvents="box-none">
-      <View style={styles.bar}>
-        {state.routes.map((route, index) => {
-          const focused = state.index === index;
-          const icon = ICONS[route.name];
-          if (!icon) return null;
+    <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, Spacing.sm) }]}>
+      {state.routes.map((route, index) => {
+        const focused = state.index === index;
+        const icon = ICONS[route.name];
+        if (!icon) return null;
 
-          const onPress = () => {
-            const event = emitter.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
-            if (!focused && !event.defaultPrevented) navigateToTab(route.key);
-          };
+        const onPress = () => {
+          const event = emitter.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
+          if (!focused && !event.defaultPrevented) navigateToTab(route.key);
+        };
 
-          if (focused) {
-            return (
-              <TouchableOpacity key={route.key} activeOpacity={0.9} onPress={onPress} style={styles.activeWrap}>
-                <LinearGradient
-                  colors={Palette.gradForest}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.activePill}>
-                  <Ionicons name={icon.on} size={20} color={Palette.white} />
-                  <Text style={styles.activeLabel}>{LABELS[route.name]}</Text>
-                </LinearGradient>
-              </TouchableOpacity>
-            );
-          }
-
-          return (
-            <TouchableOpacity key={route.key} activeOpacity={0.8} onPress={onPress} style={styles.tab}>
-              <Ionicons name={icon.off} size={23} color={Palette.mistLight} />
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+        return (
+          <TouchableOpacity
+            key={route.key}
+            activeOpacity={0.8}
+            onPress={onPress}
+            style={styles.tab}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: focused }}
+            accessibilityLabel={LABELS[route.name]}>
+            <View style={[styles.pill, focused && styles.pillOn]}>
+              <Ionicons name={focused ? icon.on : icon.off} size={22} color={focused ? Palette.white : Palette.mist} />
+            </View>
+            <Text style={[styles.label, focused && styles.labelOn]}>{LABELS[route.name]}</Text>
+          </TouchableOpacity>
+        );
+      })}
     </View>
   );
 }
 
 const styles = scaledSheet({
-  outer: { position: 'absolute', left: 0, right: 0, bottom: 0, alignItems: 'center', backgroundColor: 'transparent' },
   bar: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
     backgroundColor: Palette.surface,
-    borderRadius: Radius.pill,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: Spacing.sm,
-    ...Shadow.lift,
+    paddingTop: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Palette.line,
+    shadowColor: '#0B2416',
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: -4 },
+    elevation: 12,
   },
-  tab: { width: 52, height: 48, alignItems: 'center', justifyContent: 'center' },
-  activeWrap: { borderRadius: Radius.pill },
-  activePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    height: 48,
-    paddingHorizontal: Spacing.xl,
-    borderRadius: Radius.pill,
-  },
-  activeLabel: { fontFamily: Font.bold, color: Palette.white, fontSize: 15 },
+  tab: { flex: 1, alignItems: 'center', gap: 3 },
+  pill: { width: 58, height: 32, borderRadius: Radius.pill, alignItems: 'center', justifyContent: 'center' },
+  pillOn: { backgroundColor: Palette.forest },
+  label: { fontFamily: Font.medium, fontSize: 12, color: Palette.mist },
+  labelOn: { fontFamily: Font.bold, color: Palette.forest },
 });

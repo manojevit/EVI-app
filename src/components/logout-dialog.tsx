@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 
 import ConfirmDialog from '@/components/confirm-dialog';
-import { useAppStore } from '@/data/app-store';
+import { signOut, useAppStore } from '@/data/app-store';
 
 /** "Log out?" confirmation, shared by Account and Settings. */
 export default function LogoutDialog({ visible, onCancel }: { visible: boolean; onCancel: () => void }) {
@@ -14,13 +14,14 @@ export default function LogoutDialog({ visible, onCancel }: { visible: boolean; 
       title="Log out?"
       message={
         charging
-          ? "Your car is still charging. The charge keeps going, and you'll see it again when you sign back in with your mobile number."
-          : "You'll need your mobile number and a one-time code to sign in again."
+          ? 'Your car is still charging. Logging out stops tracking it on this phone and clears your saved data here.'
+          : "You'll need your mobile number and a one-time code to sign in again. Saved data on this phone will be cleared."
       }
       confirmLabel="Log out"
       onCancel={onCancel}
       onConfirm={() => {
         onCancel();
+        signOut();
         router.replace('/login');
       }}
     />

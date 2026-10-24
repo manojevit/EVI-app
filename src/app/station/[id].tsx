@@ -18,7 +18,6 @@ import {
 
 import AppHeader from '@/components/app-header';
 import ConnectorIcon from '@/components/connector-icon';
-import LiveMap from '@/components/live-map';
 import VoltButton from '@/components/volt-button';
 import { s, scaledSheet } from '@/constants/responsive';
 import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
@@ -28,7 +27,6 @@ import {
   STATIONS,
   directionsUrl,
   distanceKm,
-  freeConnectorCount,
   isOpenNow,
   maxPowerKw,
   stationConnectors,
@@ -80,8 +78,6 @@ export default function StationDetail() {
   const fav = useAppStore((st) => st.favourites.includes(station.id));
   const mine = useAppStore((st) => st.myReviews[station.id]);
   const extras = stationExtras(station);
-  const total = stationConnectors(station).length;
-  const free = freeConnectorCount(station);
   const km = distanceKm(station, from);
   const open = isOpenNow(station);
   const dc = station.chargers.some((c) => c.current === 'DC' && c.online);
@@ -150,14 +146,12 @@ export default function StationDetail() {
             <View style={styles.chip}>
               <Text style={styles.chipText}>₹{station.pricePerKwh}/kWh</Text>
             </View>
-            <View style={[styles.chip, free ? styles.chipOpen : styles.chipBusy]}>
-              <Text style={[styles.chipText, { color: free ? Palette.forest : Palette.amberDeep }]}>
-                {free} of {total} free
-              </Text>
-            </View>
           </View>
 
-          <VoltButton label={`Navigate · ${kmLabel(km)}`} icon="navigate" onPress={() => Linking.openURL(directionsUrl(station))} />
+          <TouchableOpacity style={styles.navBtn} activeOpacity={0.88} onPress={() => Linking.openURL(directionsUrl(station))} accessibilityLabel="Get directions">
+            <Ionicons name="navigate" size={16} color={Palette.white} />
+            <Text style={styles.navText}>Navigate · {kmLabel(km)}</Text>
+          </TouchableOpacity>
         </View>
 
         {/* 1: tabs (stick to the top while scrolling) */}
@@ -181,10 +175,6 @@ export default function StationDetail() {
         <View style={styles.body}>
           {tab === 'Chargers' ? (
             <>
-              <Text style={styles.tabNote}>
-                {station.chargers.length} {station.chargers.length === 1 ? 'charger' : 'chargers'} · {total} connectors ·{' '}
-                <Text style={{ color: free ? Palette.forest : Palette.amberDeep, fontFamily: Font.semibold }}>{free} free now</Text>
-              </Text>
               {vehicle ? <FitBanner station={station} vehicle={vehicle} /> : null}
               {session && session.stationId !== station.id ? (
                 <Text style={styles.busyNote} onPress={() => router.navigate('/sessions')}>
@@ -204,7 +194,7 @@ export default function StationDetail() {
               ))}
             </>
           ) : null}
-          {tab === 'Info' ? <InfoTab station={station} open={open} km={km} from={from} onReport={() => router.push('/new-ticket')} /> : null}
+          {tab === 'Info' ? <InfoTab station={station} open={open} km={km} onReport={() => router.push('/new-ticket')} /> : null}
           {tab === 'Nearby' ? <NearbyTab station={station} amenities={extras.amenities} /> : null}
           {tab === 'Reviews' ? <ReviewsTab station={station} rating={rating} ratingCount={ratingCount} mine={mine} /> : null}
         </View>
@@ -309,14 +299,13 @@ function ChargerCard({
   const isDc = charger.current === 'DC';
   const state = (c: Connector) =>
     c.id === activeConnectorId ? 'mine' : off ? 'off' : c.availability === 'Available' ? 'free' : c.availability === 'Charging' ? 'busy' : 'off';
-  const freeHere = charger.connectors.filter((c) => state(c) === 'free').length;
 
   return (
     <View style={[styles.charger, off && styles.chargerOff]}>
       <View style={styles.chHead}>
         <View style={[styles.currentBadge, isDc ? styles.dcBadge : styles.acBadge, off && styles.badgeOff]}>
-          <Ionicons name="flash" size={14} color={isDc && !off ? Palette.white : off ? Palette.mist : Palette.forest} />
-          <Text style={[styles.currentText, isDc && !off && { color: Palette.white }, off && { color: Palette.mist }]}>{charger.current}</Text>
+          <Ionicons name="flash" size={14} color={off ? Palette.mist : Palette.white} />
+          <Text style={[styles.currentText, off && { color: Palette.mist }]}>{charger.current}</Text>
         </View>
         <View style={{ flex: 1, minWidth: 0 }}>
           <Text style={styles.serial}>{charger.serial}</Text>
@@ -330,16 +319,6 @@ function ChargerCard({
         </View>
       </View>
 
-      {/* one segment per connector */}
-      <View style={styles.segRow}>
-        <View style={styles.segs}>
-          {charger.connectors.map((c) => {
-            const st = state(c);
-            return <View key={c.id} style={[styles.seg, { backgroundColor: st === 'free' || st === 'mine' ? Palette.volt : st === 'busy' ? Palette.amber : Palette.line }]} />;
-          })}
-        </View>
-        <Text style={styles.segText}>{off ? 'Not available' : `${freeHere} of ${charger.connectors.length} free`}</Text>
-      </View>
 
       {charger.connectors.map((c, i) => {
         const st = state(c);
@@ -385,45 +364,25 @@ function InfoTab({
   station,
   open,
   km,
-  from,
   onReport,
 }: {
   station: Station;
   open: boolean;
   km: number;
-  from: { latitude: number; longitude: number };
   onReport: () => void;
 }) {
   const types = [...new Set(stationConnectors(station).map((c) => c.type))];
 
   return (
     <>
-      {/* where */}
-      <View style={styles.card}>
-        <View style={styles.mapBox}>
-          <LiveMap
-            pins={[{ id: station.id, latitude: station.latitude, longitude: station.longitude, available: freeConnectorCount(station) > 0 }]}
-            user={from}
-            fit={[[station.longitude, station.latitude]]}
-            interactive={false}
-            padding={{ top: 60, bottom: 20, left: 40, right: 40 }}
-          />
-        </View>
-        <View style={styles.whereRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.infoTitle}>
-              {station.address}, {station.city}
-            </Text>
-            <Text style={styles.infoSub}>{kmLabel(km)} from you</Text>
-          </View>
-          <TouchableOpacity style={styles.dirBtn} onPress={() => Linking.openURL(directionsUrl(station))} activeOpacity={0.8} accessibilityLabel="Get directions">
-            <Ionicons name="navigate" size={18} color={Palette.white} />
-          </TouchableOpacity>
-        </View>
-      </View>
-
       {/* the essentials, one line each */}
       <View style={styles.card}>
+        <InfoRow icon="location-outline" label="Address">
+          <Text style={styles.infoValue}>
+            {station.address}, {station.city}
+          </Text>
+          <Text style={styles.infoNote}>{kmLabel(km)} from you</Text>
+        </InfoRow>
         <InfoRow icon="time-outline" label="Hours">
           <Text style={styles.infoValue}>
             {station.hours === '24 Hours' ? 'Open 24 hours' : station.hours} ·{' '}
@@ -717,10 +676,11 @@ const styles = scaledSheet({
   ratingBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: Palette.amberSoft, borderRadius: Radius.pill, paddingHorizontal: 10, paddingVertical: 6, marginTop: 2 },
   ratingBadgeText: { fontFamily: Font.bold, fontSize: 13, color: Palette.amberDeep },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+  navBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, height: 42, borderRadius: Radius.pill, backgroundColor: Palette.forest },
+  navText: { fontFamily: Font.bold, fontSize: 14, color: Palette.white },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: Palette.surface, borderRadius: Radius.pill, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, borderColor: Palette.line },
   chipOpen: { backgroundColor: Palette.voltSofter, borderColor: Palette.brandTint2 },
   chipClosed: { backgroundColor: Palette.redSoft, borderColor: Palette.redSoft },
-  chipBusy: { backgroundColor: Palette.amberSoft, borderColor: Palette.amberSoft },
   chipDot: { width: 7, height: 7, borderRadius: 4 },
   chipText: { fontFamily: Font.semibold, fontSize: 13, color: Palette.ink },
 
@@ -749,19 +709,15 @@ const styles = scaledSheet({
   chHead: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
   currentBadge: { flexDirection: 'row', gap: 2, height: 42, paddingHorizontal: 10, borderRadius: Radius.chip, alignItems: 'center', justifyContent: 'center' },
   dcBadge: { backgroundColor: Palette.volt },
-  acBadge: { backgroundColor: Palette.voltSoft },
+  acBadge: { backgroundColor: Palette.forest },
   badgeOff: { backgroundColor: Palette.canvasDeep },
-  currentText: { fontFamily: Font.display, fontSize: 13, color: Palette.forest },
+  currentText: { fontFamily: Font.display, fontSize: 13, color: Palette.white },
   serial: { fontFamily: Font.displaySemi, fontSize: 16, color: Palette.ink },
   chMeta: { fontFamily: Font.regular, fontSize: 12, color: Palette.mist, marginTop: 1 },
   onlineRow: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: Palette.voltSofter, borderRadius: Radius.pill, paddingHorizontal: 8, paddingVertical: 4 },
   onlineRowOff: { backgroundColor: Palette.canvasDeep },
   onlineDot: { width: 7, height: 7, borderRadius: 4 },
   onlineText: { fontFamily: Font.semibold, fontSize: 12, color: Palette.forest },
-  segRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, marginTop: Spacing.md, marginBottom: Spacing.xs, paddingBottom: Spacing.md, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Palette.line },
-  segs: { flex: 1, flexDirection: 'row', gap: 4 },
-  seg: { flex: 1, height: 6, borderRadius: 3 },
-  segText: { fontFamily: Font.semibold, fontSize: 12, color: Palette.inkSoft },
 
   connRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, paddingVertical: Spacing.md },
   connDivider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: Palette.lineSoft },
@@ -786,14 +742,12 @@ const styles = scaledSheet({
   infoSub: { fontFamily: Font.regular, fontSize: 13, color: Palette.mist, lineHeight: 18 },
 
   // info
-  mapBox: { height: 150, backgroundColor: Palette.canvasDeep },
-  whereRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, padding: Spacing.lg },
-  dirBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: Palette.forest, alignItems: 'center', justifyContent: 'center' },
   infoRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, paddingHorizontal: Spacing.lg, paddingVertical: 14 },
   infoDivider: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Palette.line },
   infoLabel: { fontFamily: Font.medium, fontSize: 14, color: Palette.mist, width: 86 },
   infoRight: { flex: 1, alignItems: 'flex-end' },
   infoValue: { fontFamily: Font.semibold, fontSize: 14, color: Palette.ink, textAlign: 'right' },
+  infoNote: { fontFamily: Font.regular, fontSize: 12, color: Palette.mist, marginTop: 2 },
   typeIcons: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 8 },
   reportRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingHorizontal: Spacing.xs, paddingVertical: Spacing.sm },
   reportText: { flex: 1, fontFamily: Font.semibold, fontSize: 14, color: Palette.red },

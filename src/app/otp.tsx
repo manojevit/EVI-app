@@ -20,6 +20,7 @@ import BrandLogo from '@/components/brand-logo';
 import VoltButton from '@/components/volt-button';
 import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
 import { scaledSheet } from '@/constants/responsive';
+import { signIn } from '@/data/app-store';
 import { SUPPORT_CONTACT } from '@/data/mock';
 
 const LENGTH = 6;
@@ -63,7 +64,10 @@ export default function OtpScreen() {
   const verify = (value: string) => {
     if (value.length !== LENGTH || verifying) return;
     setVerifying(true);
-    setTimeout(() => router.replace('/map'), 700);
+    setTimeout(() => {
+      signIn();
+      router.replace('/map');
+    }, 700);
   };
 
   const onChange = (v: string) => {

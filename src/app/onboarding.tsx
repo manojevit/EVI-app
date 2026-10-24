@@ -28,6 +28,7 @@ import BrandLogo from '@/components/brand-logo';
 import LiveMap from '@/components/live-map';
 import { fs } from '@/constants/responsive';
 import { Font, Palette, Radius, Shadow, Spacing } from '@/constants/theme';
+import { finishOnboarding } from '@/data/app-store';
 import { STATIONS } from '@/data/mock';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -299,6 +300,7 @@ export default function OnboardingScreen() {
   const finish = () => {
     if (leaving.current) return;
     leaving.current = true;
+    finishOnboarding();
     router.replace('/login');
   };
   const next = () => {

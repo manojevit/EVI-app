@@ -125,7 +125,7 @@ function Stat({ value, label }: { value: string; label: string }) {
 
 const styles = scaledSheet({
   container: { flex: 1, backgroundColor: Palette.canvas },
-  scroll: { padding: Spacing.lg, paddingTop: Spacing.xs, paddingBottom: 130, gap: Spacing.lg },
+  scroll: { padding: Spacing.lg, paddingTop: Spacing.xs, paddingBottom: Spacing.xl, gap: Spacing.lg },
 
   profile: { backgroundColor: Palette.surface, borderRadius: Radius.card, padding: Spacing.lg, gap: Spacing.lg, ...Shadow.soft },
   profileTop: { flexDirection: 'row', alignItems: 'center', gap: Spacing.lg },
